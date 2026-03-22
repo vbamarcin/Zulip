@@ -6,7 +6,6 @@ build/
 # Android Studio
 .idea/
 *.iml
-*.apk
 *.ap_
 *.dex
 *.class
@@ -84,3 +83,7 @@ Thumbs.db
 # AndroidStudio specific (safe to ignore)
 gradlew.bat
 gradlew
+
+# Allow APK in releases folder
+!releases/
+!releases/*.apk
