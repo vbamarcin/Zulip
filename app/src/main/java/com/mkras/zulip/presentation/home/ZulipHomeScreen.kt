@@ -28,20 +28,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AllInbox
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.Forum
-import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.People
 import androidx.compose.material.icons.automirrored.rounded.ManageSearch
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
@@ -83,6 +79,7 @@ import com.mkras.zulip.core.update.GitHubReleaseInfo
 import com.mkras.zulip.core.update.GitHubUpdateManager
 import com.mkras.zulip.presentation.auth.rememberSharedImageAuthHeader
 import com.mkras.zulip.presentation.chat.ChatScreen
+import com.mkras.zulip.presentation.chat.UsersScreen
 import com.mkras.zulip.presentation.chat.ChatViewModel
 import com.mkras.zulip.presentation.channels.ChannelsScreen
 import com.mkras.zulip.presentation.channels.ChannelsViewModel
@@ -99,7 +96,7 @@ private val HOME_TABS = listOf(
     RootTab("Kanały", Icons.Rounded.Forum),
     RootTab("Wszystkie", Icons.Rounded.AllInbox),
     RootTab("Szukaj", Icons.AutoMirrored.Rounded.ManageSearch),
-    RootTab("★ Gwiazdki", Icons.Rounded.Star),
+    RootTab("Użytkownicy", Icons.Rounded.People),
     RootTab("Ustawienia", Icons.Rounded.Settings)
 )
 private val TabBarBg      = Color(0xCC0B1728)
@@ -204,68 +201,38 @@ fun ZulipHomeScreen(
                 updateStatusText = "Sprawdzanie dostępności nowej wersji..."
             }
 
-            var detectedVersion: String? = null
-            var detectedFile: String? = null
-            var detectedRelease: GitHubReleaseInfo? = null
-
-            if (detectedVersion == null) {
-                val notesFallback = GitHubUpdateManager.checkForUpdateFromReleaseNotes(
-                    owner = UPDATE_REPO_OWNER,
-                    repo = UPDATE_REPO_NAME,
-                    currentVersionName = BuildConfig.VERSION_NAME
-                )
-                notesFallback.onSuccess { release ->
-                    if (release != null) {
-                        detectedRelease = release
-                        detectedVersion = release.tagName.removePrefix("v").removePrefix("V")
-                        detectedFile = release.apkName
-                    }
-                }
-            }
-
-            if (detectedVersion == null) {
-                val githubResult = GitHubUpdateManager.checkForUpdate(
-                    owner = UPDATE_REPO_OWNER,
-                    repo = UPDATE_REPO_NAME,
-                    currentVersionName = BuildConfig.VERSION_NAME
-                )
-                githubResult.onSuccess { release ->
-                    if (release != null) {
-                        detectedRelease = release
-                        detectedVersion = release.tagName.removePrefix("v").removePrefix("V")
-                        detectedFile = release.apkName
-                    }
-                }
-            }
-
-            if (detectedVersion != null) {
+            // Najpierw sprawdzamy oficjalne Release API
+            val githubResult = GitHubUpdateManager.checkForUpdate(
+                owner = UPDATE_REPO_OWNER,
+                repo = UPDATE_REPO_NAME,
+                currentVersionName = BuildConfig.VERSION_NAME
+            )
+            
+            val detectedRelease = githubResult.getOrNull()
+            
+            if (detectedRelease != null) {
                 latestAvailableRelease = detectedRelease
-                startupUpdateMessage = "Dostępna nowa wersja ${detectedVersion} (${detectedFile.orEmpty()}).\n\nNaciśnij \"Zainstaluj\", aby pobrać i uruchomić instalację APK."
-                updateStatusText = "Wykryto nową wersję: ${detectedVersion}"
+                val ver = detectedRelease.tagName.removePrefix("v").removePrefix("V")
+                startupUpdateMessage = "Dostępna nowa wersja $ver (${detectedRelease.apkName}).\n\nNaciśnij \"Zainstaluj\", aby pobrać i uruchomić instalację APK."
+                updateStatusText = "Wykryto nową wersję: $ver"
+                
                 if (manual) {
-                    val release = detectedRelease
-                    if (release != null) {
-                        updateStatusText = "Pobieranie aktualizacji ${detectedVersion}..."
-                        val installResult = GitHubUpdateManager.downloadAndInstall(
-                            context = context,
-                            release = release
-                        )
-                        installResult.onSuccess {
-                            updateStatusText = "Pobrano aktualizację. Dokończ instalację w systemie Android."
-                        }.onFailure { error ->
-                            updateStatusText = error.message ?: "Nie udało się pobrać aktualizacji"
-                        }
-                    } else {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(UPDATE_RELEASES_PAGE_URL)).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        context.startActivity(intent)
+                    updateStatusText = "Pobieranie aktualizacji $ver..."
+                    val installResult = GitHubUpdateManager.downloadAndInstall(
+                        context = context,
+                        release = detectedRelease
+                    )
+                    installResult.onSuccess {
+                        updateStatusText = "Pobrano aktualizację. Dokończ instalację w systemie Android."
+                    }.onFailure { error ->
+                        updateStatusText = error.message ?: "Nie udało się pobrać aktualizacji"
                     }
                 }
             } else {
                 latestAvailableRelease = null
-                updateStatusText = if (manual) "Brak nowszej wersji" else null
+                updateStatusText = if (manual) "Twoja wersja jest aktualna" else null
                 if (manual) {
+                    // Jeśli ręcznie, możemy przekierować na stronę releases na wszelki wypadek
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(UPDATE_RELEASES_PAGE_URL)).apply {
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
@@ -316,6 +283,9 @@ fun ZulipHomeScreen(
     LaunchedEffect(selectedTab) {
         if (selectedTab == 1) {
             channelsViewModel.onChannelsVisible()
+        }
+        if (selectedTab == 4) {
+            chatViewModel.ensureMentionCandidatesLoaded()
         }
     }
 
@@ -374,7 +344,6 @@ fun ZulipHomeScreen(
     ) {
     Scaffold(
         bottomBar = {
-            // Completely custom bottom bar to avoid clipping issues
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -618,23 +587,17 @@ fun ZulipHomeScreen(
                             onQueryChange = chatViewModel::updateSearchQuery,
                             onSearch = chatViewModel::submitSearch
                         )
-                        4 -> AllMessagesScreen(
-                            messages = chatUiState.starredMessages,
-                            compactMode = compactMode,
-                            serverUrl = session.serverUrl,
-                            imageAuthHeader = imageAuthHeader,
-                            onMessageClick = { message ->
-                                if (message.messageType == "private") {
-                                    selectedTab = 0
-                                    chatViewModel.openConversationFromMessage(message)
-                                } else {
-                                    val streamName = message.streamName
-                                    if (streamName != null && message.topic.isNotBlank()) {
-                                        selectedTab = 1
-                                        channelsViewModel.openFromAllMessages(streamName, message.topic, message.id)
-                                    }
-                                }
-                            }
+                        4 -> UsersScreen(
+                            people = chatUiState.newDmPeople,
+                            presenceByEmail = chatUiState.presenceByEmail,
+                            isLoading = chatUiState.isNewDmLoading,
+                            error = chatUiState.newDmError,
+                            onEnsureLoaded = chatViewModel::ensureMentionCandidatesLoaded,
+                            onSelectUser = { person ->
+                                chatViewModel.startDirectMessage(person)
+                                selectedTab = 0
+                            },
+                            compactMode = compactMode
                         )
                         else -> SettingsPanel(
                             session = session,
