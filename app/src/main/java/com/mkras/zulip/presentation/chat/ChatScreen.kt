@@ -110,7 +110,7 @@ private val CardBg = Color(0xFF1A2B44)
 private val NameColor = Color(0xFFE9F0FF)
 private val SubtleColor = Color(0xFF8FA8C8)
 private val ContentColor = Color(0xFFD0DCF0)
-private val OutgoingBubble = Color(0xFF1DB954)
+private val OutgoingBubble = Color(0xFF2E3A36)
 private val OutgoingText = Color(0xFFFFFFFF)
 private val BubbleOutline = Color(0xFF284869)
 private val ThreadBackdrop = Color(0x99111D31)
@@ -898,7 +898,7 @@ private fun MessageBubble(
         Box(
             modifier = Modifier.fillMaxWidth(0.80f).background(
                 color = when {
-                    isHighlighted && isOwnMessage -> Color(0xFF2DB94F)
+                    isHighlighted && isOwnMessage -> Color(0xFF3A4A44)
                     isHighlighted -> Color(0xFF1F3A4D)
                     isOwnMessage -> OutgoingBubble
                     else -> CardBg
@@ -924,7 +924,7 @@ private fun MessageBubble(
                     Text(
                         text = formatMessageTime(message.timestampSeconds),
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFFB8E6BE),
+                        color = Color(0xFFC9D7CF),
                         fontSize = 11.sp,
                         modifier = Modifier.align(Alignment.End).padding(top = 2.dp)
                     )
