@@ -4,7 +4,20 @@ Tutaj dostępne są gotowe do instalacji wersje aplikacji Toya Zulip.
 
 ---
 
-## 📦 v1.6.12 (2026-03-22) — NAJNOWSZA
+## 📦 v1.6.13 (2026-03-22) — NAJNOWSZA
+
+**Plik:** `Toya-Zulip-v1.6.13.apk`  
+**Rozmiar:** 52.5 MB  
+
+### Zmiany w v1.6.13
+- ✅ Aktualizacje przełączone na publiczny GitHub (bez OneDrive)
+- ✅ Usunięty hardcoded token PAT z aplikacji
+- ✅ Sprawdzanie nowej wersji oparte o `releases/RELEASES.md` + fallback do folderu `releases` na GitHub
+- ✅ Przycisk ręcznego sprawdzenia zawsze otwiera działającą stronę aktualizacji na GitHub
+
+---
+
+## 📦 v1.6.12 (2026-03-22)
 
 **Plik:** `Toya-Zulip-v1.6.12.apk`  
 **Rozmiar:** 55.3 MB  

@@ -14,7 +14,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
-import java.util.Base64
 
 private const val GITHUB_API_BASE = "https://api.github.com"
 
@@ -31,15 +30,17 @@ object GitHubUpdateManager {
         owner: String,
         repo: String,
         currentVersionName: String,
-        token: String
+        token: String? = null
     ): Result<GitHubReleaseInfo?> = withContext(Dispatchers.IO) {
         runCatching {
-            val request = Request.Builder()
+            val requestBuilder = Request.Builder()
                 .url("$GITHUB_API_BASE/repos/$owner/$repo/releases/latest")
-                .addHeader("Authorization", "Bearer $token")
                 .addHeader("Accept", "application/vnd.github+json")
                 .addHeader("X-GitHub-Api-Version", "2022-11-28")
-                .build()
+            if (!token.isNullOrBlank()) {
+                requestBuilder.addHeader("Authorization", "Bearer $token")
+            }
+            val request = requestBuilder.build()
 
             httpClient.newCall(request).execute().use { response ->
                 if (response.code == 404) {
@@ -98,14 +99,11 @@ object GitHubUpdateManager {
         owner: String,
         repo: String,
         currentVersionName: String,
-        token: String
+        token: String? = null
     ): Result<GitHubReleaseInfo?> = withContext(Dispatchers.IO) {
         runCatching {
             val request = Request.Builder()
-                .url("$GITHUB_API_BASE/repos/$owner/$repo/contents/releases/RELEASES.md")
-                .addHeader("Authorization", "Bearer $token")
-                .addHeader("Accept", "application/vnd.github+json")
-                .addHeader("X-GitHub-Api-Version", "2022-11-28")
+                .url("https://raw.githubusercontent.com/$owner/$repo/main/releases/RELEASES.md")
                 .build()
 
             httpClient.newCall(request).execute().use { response ->
@@ -118,29 +116,22 @@ object GitHubUpdateManager {
                     return@use null
                 }
 
-                val json = JSONObject(body)
-                val encoded = json.optString("content").orEmpty().replace("\n", "")
-                if (encoded.isBlank()) {
-                    return@use null
-                }
-
-                val decoded = runCatching {
-                    String(Base64.getDecoder().decode(encoded))
-                }.getOrElse { return@use null }
-
-                val firstMatch = Regex("""Toya-Zulip-v(\d+\.\d+\.\d+)\.apk""", RegexOption.IGNORE_CASE)
-                    .find(decoded)
+                val versionMatch = Regex("""##\s*.*v(\d+\.\d+\.\d+)""", RegexOption.IGNORE_CASE)
+                    .find(body)
                     ?.groupValues
                     ?.getOrNull(1)
                     ?: return@use null
 
-                val latestVersion = normalizeVersion(firstMatch)
+                val latestVersion = normalizeVersion(versionMatch)
                 val currentVersion = normalizeVersion(currentVersionName)
                 if (!isVersionNewer(latestVersion, currentVersion)) {
                     return@use null
                 }
 
-                val apkName = "Toya-Zulip-v$latestVersion.apk"
+                val explicitApk = Regex("""Toya-Zulip-v$latestVersion\.apk""", RegexOption.IGNORE_CASE)
+                    .find(body)
+                    ?.value
+                val apkName = explicitApk ?: "Toya-Zulip-v$latestVersion.apk"
                 GitHubReleaseInfo(
                     tagName = "v$latestVersion",
                     apkName = apkName,
@@ -154,14 +145,16 @@ object GitHubUpdateManager {
         owner: String,
         repo: String,
         currentVersionName: String,
-        token: String
+        token: String? = null
     ): GitHubReleaseInfo? {
-        val request = Request.Builder()
+        val requestBuilder = Request.Builder()
             .url("$GITHUB_API_BASE/repos/$owner/$repo/contents/releases")
-            .addHeader("Authorization", "Bearer $token")
             .addHeader("Accept", "application/vnd.github+json")
             .addHeader("X-GitHub-Api-Version", "2022-11-28")
-            .build()
+        if (!token.isNullOrBlank()) {
+            requestBuilder.addHeader("Authorization", "Bearer $token")
+        }
+        val request = requestBuilder.build()
 
         httpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
@@ -220,7 +213,7 @@ object GitHubUpdateManager {
     suspend fun downloadAndInstall(
         context: Context,
         release: GitHubReleaseInfo,
-        token: String
+        token: String? = null
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !context.packageManager.canRequestPackageInstalls()) {
@@ -234,15 +227,17 @@ object GitHubUpdateManager {
                 error("Włącz zgodę na instalację nieznanych aplikacji dla Toya Zulip")
             }
 
-            val request = Request.Builder()
+            val requestBuilder = Request.Builder()
                 .url(release.apkUrl)
-                .addHeader("Authorization", "Bearer $token")
                 .addHeader(
                     "Accept",
                     if (release.apkUrl.startsWith(GITHUB_API_BASE)) "application/vnd.github.raw" else "application/octet-stream"
                 )
                 .addHeader("X-GitHub-Api-Version", "2022-11-28")
-                .build()
+            if (!token.isNullOrBlank()) {
+                requestBuilder.addHeader("Authorization", "Bearer $token")
+            }
+            val request = requestBuilder.build()
 
             val updateDir = File(
                 context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),

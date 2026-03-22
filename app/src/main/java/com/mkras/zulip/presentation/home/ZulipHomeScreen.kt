@@ -80,7 +80,6 @@ import com.mkras.zulip.core.security.StoredAuth
 import com.mkras.zulip.NotificationNavigationTarget
 import com.mkras.zulip.R
 import com.mkras.zulip.core.update.GitHubUpdateManager
-import com.mkras.zulip.core.update.OneDriveUpdateChecker
 import com.mkras.zulip.presentation.auth.rememberSharedImageAuthHeader
 import com.mkras.zulip.presentation.chat.ChatScreen
 import com.mkras.zulip.presentation.chat.ChatViewModel
@@ -109,10 +108,7 @@ private val TabUnselected = Color(0xFFA8B4C7)
 private val TabBadgeBg    = Color(0xFF8A3B2E)
 private const val UPDATE_REPO_OWNER = "vbamarcin"
 private const val UPDATE_REPO_NAME = "Zulip"
-private const val ONEDRIVE_UPDATES_URL = "https://1drv.ms/f/c/c163d95441785e7e/IgDA8mbdi52TTYS8kK_ELwAAAXfxqkRvfvMG8GPiUFGHEsA?e=36gfeF"
-private const val BUILTIN_GITHUB_TOKEN =
-    "github_pat_" +
-        "11A3CKDDI01RVOg20V6RoH_DxglM1CEiLszqVTSsjRsdD4Cew0JvUWKwlyIGlOyAswTQVT4HVTNLGZVmWF"
+private const val UPDATE_RELEASES_PAGE_URL = "https://github.com/vbamarcin/Zulip/tree/main/releases"
 
 private fun moderationErrorMessage(raw: String): String {
     val normalized = raw.lowercase()
@@ -171,11 +167,11 @@ fun ZulipHomeScreen(
     var isCheckingUpdate by rememberSaveable { mutableStateOf(false) }
     var updateStatusText by rememberSaveable { mutableStateOf<String?>(null) }
     var startupUpdateMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var startupUpdateUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var checkedUpdateThisSession by rememberSaveable { mutableStateOf(false) }
     var pendingNotificationReadMessageId by rememberSaveable { mutableStateOf<Long?>(null) }
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val gitHubToken = BUILTIN_GITHUB_TOKEN
 
     val hasNotificationPermission = remember(context) {
         {
@@ -209,18 +205,19 @@ fun ZulipHomeScreen(
 
             var detectedVersion: String? = null
             var detectedFile: String? = null
+            var detectedUrl: String? = null
 
             if (detectedVersion == null) {
                 val notesFallback = GitHubUpdateManager.checkForUpdateFromReleaseNotes(
                     owner = UPDATE_REPO_OWNER,
                     repo = UPDATE_REPO_NAME,
-                    currentVersionName = BuildConfig.VERSION_NAME,
-                    token = gitHubToken
+                    currentVersionName = BuildConfig.VERSION_NAME
                 )
                 notesFallback.onSuccess { release ->
                     if (release != null) {
                         detectedVersion = release.tagName.removePrefix("v").removePrefix("V")
                         detectedFile = release.apkName
+                        detectedUrl = release.apkUrl
                     }
                 }
             }
@@ -229,38 +226,36 @@ fun ZulipHomeScreen(
                 val githubResult = GitHubUpdateManager.checkForUpdate(
                     owner = UPDATE_REPO_OWNER,
                     repo = UPDATE_REPO_NAME,
-                    currentVersionName = BuildConfig.VERSION_NAME,
-                    token = gitHubToken
+                    currentVersionName = BuildConfig.VERSION_NAME
                 )
                 githubResult.onSuccess { release ->
                     if (release != null) {
                         detectedVersion = release.tagName.removePrefix("v").removePrefix("V")
                         detectedFile = release.apkName
-                    }
-                }
-            }
-
-            if (detectedVersion == null) {
-                val oneDriveResult = OneDriveUpdateChecker.findLatestVersion(ONEDRIVE_UPDATES_URL)
-                oneDriveResult.onSuccess { latest ->
-                    if (latest != null && OneDriveUpdateChecker.isNewerVersion(latest.version, BuildConfig.VERSION_NAME)) {
-                        detectedVersion = latest.version
-                        detectedFile = latest.fileName
+                        detectedUrl = release.apkUrl
                     }
                 }
             }
 
             if (detectedVersion != null) {
-                startupUpdateMessage = "Dostępna nowa wersja ${detectedVersion} (${detectedFile.orEmpty()}).\n\nAby zaktualizować:\n1. Otwórz folder aktualizacji\n2. Pobierz najnowszy APK\n3. Zainstaluj plik na urządzeniu"
+                startupUpdateMessage = "Dostępna nowa wersja ${detectedVersion} (${detectedFile.orEmpty()}).\n\nAby zaktualizować:\n1. Otwórz stronę aktualizacji na GitHub\n2. Pobierz najnowszy APK\n3. Zainstaluj plik na urządzeniu"
+                startupUpdateUrl = detectedUrl ?: UPDATE_RELEASES_PAGE_URL
                 updateStatusText = "Wykryto nową wersję: ${detectedVersion}"
                 if (manual) {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(ONEDRIVE_UPDATES_URL)).apply {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(detectedUrl ?: UPDATE_RELEASES_PAGE_URL)).apply {
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
                     context.startActivity(intent)
                 }
             } else {
-                updateStatusText = if (manual) "Brak nowszej wersji" else null
+                startupUpdateUrl = null
+                updateStatusText = if (manual) "Brak nowszej wersji, otwieram listę wydań" else null
+                if (manual) {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(UPDATE_RELEASES_PAGE_URL)).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(intent)
+                }
             }
 
             isCheckingUpdate = false
@@ -713,7 +708,7 @@ fun ZulipHomeScreen(
                         confirmButton = {
                             TextButton(onClick = {
                                 startupUpdateMessage = null
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(ONEDRIVE_UPDATES_URL)).apply {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(startupUpdateUrl ?: UPDATE_RELEASES_PAGE_URL)).apply {
                                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                 }
                                 context.startActivity(intent)
@@ -888,7 +883,7 @@ private fun SettingsPanel(
                             strokeWidth = 2.dp
                         )
                     } else {
-                        Text("Otwórz aktualizacje (OneDrive)")
+                        Text("Sprawdź aktualizacje (GitHub)")
                     }
                 }
                 if (!updateStatusText.isNullOrBlank()) {
