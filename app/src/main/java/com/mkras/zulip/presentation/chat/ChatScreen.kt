@@ -298,7 +298,7 @@ private fun DmConversationList(
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         ModalNavigationDrawer(
             drawerState = drawerState,
-            gesturesEnabled = isNewDmPickerVisible,
+            gesturesEnabled = true,
             drawerContent = {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                     ModalDrawerSheet(
