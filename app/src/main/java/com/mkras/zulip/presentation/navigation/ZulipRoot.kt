@@ -245,7 +245,20 @@ private fun BiometricLockScreen(
     onLogout: () -> Unit
 ) {
     val context = LocalContext.current
-    LaunchedEffect(Unit) {
+    var promptNonce by remember { mutableStateOf(0) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                promptNonce++
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    LaunchedEffect(promptNonce) {
         val activity = context as? AppCompatActivity
         if (activity == null) {
             onAuthenticated()
@@ -267,12 +280,10 @@ private fun BiometricLockScreen(
                     onAuthenticated()
                 }
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                    if (errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON ||
-                        errorCode == BiometricPrompt.ERROR_USER_CANCELED
-                    ) {
+                    if (errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON) {
                         onLogout()
                     } else {
-                        onAuthenticated()
+                        // Keep lock screen active; prompt will be retried on next resume or manual retry.
                     }
                 }
             }
@@ -321,6 +332,9 @@ private fun BiometricLockScreen(
             Spacer(modifier = Modifier.height(24.dp))
             TextButton(onClick = onLogout) {
                 Text("Wyloguj", color = Color(0xFF8CD9FF))
+            }
+            TextButton(onClick = { promptNonce++ }) {
+                Text("Odblokuj ponownie", color = Color(0xFF8CD9FF))
             }
         }
     }
