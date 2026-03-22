@@ -39,7 +39,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.mkras.zulip.core.realtime.EventServiceController
 import com.mkras.zulip.NotificationNavigationTarget
 import com.mkras.zulip.R
@@ -80,6 +83,19 @@ fun ZulipRoot(
 
     val session = uiState.currentSession
     var biometricAuthenticated by remember { mutableStateOf(false) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner, session) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && session != null) {
+                biometricAuthenticated = false
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     DisposableEffect(session?.serverUrl, session?.email) {
         if (session != null) {
