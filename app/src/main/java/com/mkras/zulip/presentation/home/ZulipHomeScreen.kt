@@ -29,26 +29,31 @@ import androidx.compose.material.icons.rounded.Forum
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.automirrored.rounded.ManageSearch
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Typography
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -57,6 +62,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
 import androidx.compose.foundation.rememberScrollState
@@ -78,6 +84,9 @@ import com.mkras.zulip.presentation.chat.ChatViewModel
 import com.mkras.zulip.presentation.channels.ChannelsScreen
 import com.mkras.zulip.presentation.channels.ChannelsViewModel
 import com.mkras.zulip.presentation.search.SearchScreen
+import com.mkras.zulip.core.update.GitHubReleaseInfo
+import com.mkras.zulip.core.update.GitHubUpdateManager
+import kotlinx.coroutines.launch
 
 private data class RootTab(
     val label: String,
@@ -97,6 +106,8 @@ private val TabBarBorder  = Color(0x334A8AC2)
 private val TabSelected   = Color(0xFF8CD9FF)
 private val TabUnselected = Color(0xFFA8B4C7)
 private val TabBadgeBg    = Color(0xFF8A3B2E)
+private const val UPDATE_REPO_OWNER = "vbamarcin"
+private const val UPDATE_REPO_NAME = "Zulip"
 
 private fun moderationErrorMessage(raw: String): String {
     val normalized = raw.lowercase()
@@ -137,6 +148,10 @@ fun ZulipHomeScreen(
     onNotificationTargetConsumed: () -> Unit = {},
     initialBiometricLockEnabled: Boolean = false,
     onSaveBiometricLockEnabled: (Boolean) -> Unit = {},
+    initialAutoUpdateEnabled: Boolean = true,
+    onSaveAutoUpdateEnabled: (Boolean) -> Unit = {},
+    initialGitHubToken: String = "",
+    onSaveGitHubToken: (String) -> Unit = {},
     chatViewModel: ChatViewModel = hiltViewModel(),
     channelsViewModel: ChannelsViewModel = hiltViewModel()
 ) {
@@ -149,7 +164,15 @@ fun ZulipHomeScreen(
     var dmNotificationsEnabled by rememberSaveable { mutableStateOf(initialDmNotificationsEnabled) }
     var channelNotificationsEnabled by rememberSaveable { mutableStateOf(initialChannelNotificationsEnabled) }
     var biometricLockEnabled by rememberSaveable { mutableStateOf(initialBiometricLockEnabled) }
+    var autoUpdateEnabled by rememberSaveable { mutableStateOf(initialAutoUpdateEnabled) }
+    var gitHubToken by rememberSaveable { mutableStateOf(initialGitHubToken) }
+    var isCheckingUpdate by rememberSaveable { mutableStateOf(false) }
+    var isInstallingUpdate by rememberSaveable { mutableStateOf(false) }
+    var updateStatusText by rememberSaveable { mutableStateOf<String?>(null) }
+    var checkedUpdateThisSession by rememberSaveable { mutableStateOf(false) }
+    var availableRelease by remember { mutableStateOf<GitHubReleaseInfo?>(null) }
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
 
     val hasNotificationPermission = remember(context) {
         {
@@ -173,6 +196,45 @@ fun ZulipHomeScreen(
 
     var selectedTab by rememberSaveable { mutableStateOf(0) }
     val imageAuthHeader = rememberSharedImageAuthHeader()
+
+    fun checkForUpdates(manual: Boolean = false) {
+        val token = gitHubToken.trim()
+        if (token.isBlank()) {
+            if (manual) {
+                updateStatusText = "Uzupełnij token GitHub (repo prywatne), aby sprawdzić aktualizacje"
+            }
+            return
+        }
+
+        coroutineScope.launch {
+            isCheckingUpdate = true
+            updateStatusText = if (manual) "Sprawdzanie aktualizacji..." else null
+            val result = GitHubUpdateManager.checkForUpdate(
+                owner = UPDATE_REPO_OWNER,
+                repo = UPDATE_REPO_NAME,
+                currentVersionName = BuildConfig.VERSION_NAME,
+                token = token
+            )
+            isCheckingUpdate = false
+            result.onSuccess { release ->
+                availableRelease = release
+                updateStatusText = if (release != null) {
+                    "Dostępna aktualizacja: ${release.tagName}"
+                } else {
+                    "Aplikacja jest aktualna"
+                }
+            }.onFailure { error ->
+                updateStatusText = error.message ?: "Nie udało się sprawdzić aktualizacji"
+            }
+        }
+    }
+
+    LaunchedEffect(autoUpdateEnabled, gitHubToken) {
+        if (!checkedUpdateThisSession && autoUpdateEnabled && gitHubToken.trim().isNotBlank()) {
+            checkedUpdateThisSession = true
+            checkForUpdates(manual = false)
+        }
+    }
 
     val unreadDm = chatUiState.privateMessages.count { !it.isRead }
     val unreadStreamMessages = chatUiState.allMessages
@@ -569,12 +631,71 @@ fun ZulipHomeScreen(
                             onBiometricLockChanged = { enabled ->
                                 biometricLockEnabled = enabled
                                 onSaveBiometricLockEnabled(enabled)
-                            }
+                            },
+                            autoUpdateEnabled = autoUpdateEnabled,
+                            onAutoUpdateChanged = { enabled ->
+                                autoUpdateEnabled = enabled
+                                onSaveAutoUpdateEnabled(enabled)
+                            },
+                            gitHubToken = gitHubToken,
+                            onGitHubTokenChanged = { token ->
+                                gitHubToken = token
+                                onSaveGitHubToken(token)
+                            },
+                            onCheckUpdatesNow = { checkForUpdates(manual = true) },
+                            isCheckingUpdate = isCheckingUpdate,
+                            updateStatusText = updateStatusText
                         )
                     }
                 }
             }
         }
+    }
+
+    val releaseToInstall = availableRelease
+    if (releaseToInstall != null) {
+        AlertDialog(
+            onDismissRequest = { availableRelease = null },
+            title = { Text("Dostępna aktualizacja ${releaseToInstall.tagName}") },
+            text = { Text("Znaleziono nowszą wersję aplikacji (${releaseToInstall.apkName}).") },
+            confirmButton = {
+                TextButton(
+                    enabled = !isInstallingUpdate,
+                    onClick = {
+                        coroutineScope.launch {
+                            isInstallingUpdate = true
+                            val token = gitHubToken.trim()
+                            val result = GitHubUpdateManager.downloadAndInstall(
+                                context = context,
+                                release = releaseToInstall,
+                                token = token
+                            )
+                            isInstallingUpdate = false
+                            result.onSuccess {
+                                updateStatusText = "Uruchomiono instalator aktualizacji"
+                                availableRelease = null
+                            }.onFailure { error ->
+                                updateStatusText = error.message ?: "Nie udało się zainstalować aktualizacji"
+                            }
+                        }
+                    }
+                ) {
+                    if (isInstallingUpdate) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text("Pobierz i zainstaluj")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { availableRelease = null }) {
+                    Text("Później")
+                }
+            }
+        )
     }
     }
 }
@@ -663,7 +784,14 @@ private fun SettingsPanel(
     onSetChannelDisabled: (String, Boolean) -> Unit,
     getDisabledChannels: () -> Set<String>,
     biometricLockEnabled: Boolean = false,
-    onBiometricLockChanged: (Boolean) -> Unit = {}
+    onBiometricLockChanged: (Boolean) -> Unit = {},
+    autoUpdateEnabled: Boolean = true,
+    onAutoUpdateChanged: (Boolean) -> Unit = {},
+    gitHubToken: String = "",
+    onGitHubTokenChanged: (String) -> Unit = {},
+    onCheckUpdatesNow: () -> Unit = {},
+    isCheckingUpdate: Boolean = false,
+    updateStatusText: String? = null
 ) {
     var mutedChannels by remember {
         mutableStateOf(getMutedChannels().toList().sorted())
@@ -709,6 +837,36 @@ private fun SettingsPanel(
                 Spacer(modifier = Modifier.height(2.dp))
                 SettingsToggleRow(label = "Markdown w kanałach", checked = markdownEnabled, onCheckedChange = onMarkdownEnabledChanged)
                 SettingsToggleRow(label = "Blokada biometryczna / PIN", checked = biometricLockEnabled, onCheckedChange = onBiometricLockChanged)
+                SettingsToggleRow(label = "Automatyczne aktualizacje (GitHub)", checked = autoUpdateEnabled, onCheckedChange = onAutoUpdateChanged)
+                OutlinedTextField(
+                    value = gitHubToken,
+                    onValueChange = onGitHubTokenChanged,
+                    label = { Text("Token GitHub (repo prywatne)") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedButton(
+                    onClick = onCheckUpdatesNow,
+                    enabled = !isCheckingUpdate,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (isCheckingUpdate) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text("Sprawdź aktualizacje")
+                    }
+                }
+                if (!updateStatusText.isNullOrBlank()) {
+                    Text(
+                        text = updateStatusText,
+                        color = Color(0xFF8CD9FF),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
                 SettingsToggleRow(label = "Powiadomienia lokalne (global)", checked = notificationsEnabled, onCheckedChange = onNotificationsEnabledChanged)
                 SettingsToggleRow(label = "Powiadomienia DM", checked = dmNotificationsEnabled, onCheckedChange = onDmNotificationsEnabledChanged)
                 SettingsToggleRow(label = "Powiadomienia kanałów", checked = channelNotificationsEnabled, onCheckedChange = onChannelNotificationsEnabledChanged)

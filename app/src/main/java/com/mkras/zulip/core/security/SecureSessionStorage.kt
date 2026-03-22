@@ -215,6 +215,22 @@ class SecureSessionStorage @Inject constructor(
         return prefs.getBoolean(KEY_BIOMETRIC_LOCK, true)
     }
 
+    fun saveAutoUpdateEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_AUTO_UPDATE_ENABLED, enabled).apply()
+    }
+
+    fun getAutoUpdateEnabled(): Boolean {
+        return prefs.getBoolean(KEY_AUTO_UPDATE_ENABLED, true)
+    }
+
+    fun saveGitHubToken(token: String) {
+        prefs.edit().putString(KEY_GITHUB_TOKEN, token.trim()).apply()
+    }
+
+    fun getGitHubToken(): String {
+        return prefs.getString(KEY_GITHUB_TOKEN, "").orEmpty()
+    }
+
     private fun normalizeDirectMessageKey(conversationKey: String): String? {
         val selfEmail = getAuth()?.email?.trim()?.lowercase().orEmpty()
         val normalizedParts = conversationKey
@@ -247,6 +263,8 @@ class SecureSessionStorage @Inject constructor(
         private const val KEY_MUTED_DIRECT_MESSAGES = "muted_direct_messages"
         private const val KEY_MENTION_CANDIDATES_LAST_SYNC = "mention_candidates_last_sync"
         private const val KEY_BIOMETRIC_LOCK = "biometric_lock"
+          private const val KEY_AUTO_UPDATE_ENABLED = "auto_update_enabled"
+          private const val KEY_GITHUB_TOKEN = "github_token"
         // Draft keys are dynamic: "draft_$conversationKey"
     }
 }

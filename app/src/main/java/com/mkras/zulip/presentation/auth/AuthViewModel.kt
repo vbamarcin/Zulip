@@ -195,6 +195,14 @@ class AuthViewModel @Inject constructor(
     fun getBiometricLockEnabled(): Boolean = secureSessionStorage.getBiometricLockEnabled()
 
     fun saveBiometricLockEnabled(enabled: Boolean) = secureSessionStorage.saveBiometricLockEnabled(enabled)
+
+    fun getAutoUpdateEnabled(): Boolean = secureSessionStorage.getAutoUpdateEnabled()
+
+    fun saveAutoUpdateEnabled(enabled: Boolean) = secureSessionStorage.saveAutoUpdateEnabled(enabled)
+
+    fun getGitHubToken(): String = secureSessionStorage.getGitHubToken()
+
+    fun saveGitHubToken(token: String) = secureSessionStorage.saveGitHubToken(token)
 }
 
 data class AuthUiState(

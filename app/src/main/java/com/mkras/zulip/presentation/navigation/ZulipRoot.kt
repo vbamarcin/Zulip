@@ -155,7 +155,11 @@ fun ZulipRoot(
             notificationTarget = notificationTarget,
             onNotificationTargetConsumed = onNotificationTargetConsumed,
             initialBiometricLockEnabled = viewModel.getBiometricLockEnabled(),
-            onSaveBiometricLockEnabled = viewModel::saveBiometricLockEnabled
+            onSaveBiometricLockEnabled = viewModel::saveBiometricLockEnabled,
+            initialAutoUpdateEnabled = viewModel.getAutoUpdateEnabled(),
+            onSaveAutoUpdateEnabled = viewModel::saveAutoUpdateEnabled,
+            initialGitHubToken = viewModel.getGitHubToken(),
+            onSaveGitHubToken = viewModel::saveGitHubToken
         )
         }
     }
