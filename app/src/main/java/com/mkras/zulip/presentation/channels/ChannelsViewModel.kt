@@ -173,13 +173,20 @@ class ChannelsViewModel @Inject constructor(
                 delay(2500)
                 chatRepository.fetchNarrowMessagesOnline(streamName, topicName)
                     .onSuccess { messages ->
-                        _uiState.update {
-                            it.copy(
-                                messages = messages,
+                        _uiState.update { current ->
+                            // Preserve hasMoreOlderMessages and pagination state so that
+                            // loadOlderMessagesForSelectedTopic results are not overwritten.
+                            current.copy(
+                                messages = if (current.hasMoreOlderMessages) {
+                                    // Merge: keep older pages at front, update newest tail
+                                    val existingOlderIds = current.messages.map { it.id }.toSet()
+                                    val newOnly = messages.filter { it.id !in existingOlderIds }
+                                    current.messages + newOnly
+                                } else {
+                                    messages
+                                },
                                 statusMessage = null,
-                                hasMoreOlderMessages = false,
-                                isLoadingOlderMessages = false,
-                                lastOlderAnchorMessageId = null
+                                isLoadingOlderMessages = false
                             )
                         }
                     }

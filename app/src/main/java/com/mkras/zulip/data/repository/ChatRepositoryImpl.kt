@@ -172,19 +172,12 @@ class ChatRepositoryImpl @Inject constructor(
             credentials = BasicCredentials(auth.email, auth.apiKey)
         )
 
+                val streamEsc = escapeJsonOperand(streamName)
                 val narrowJson = if (topicName.isBlank()) {
-                        """
-                                [
-                                    {"operator":"stream","operand":"$streamName"}
-                                ]
-                        """.trimIndent().replace("\n", "")
+                        "[{\"operator\":\"stream\",\"operand\":\"$streamEsc\"}]"
                 } else {
-                        """
-                                [
-                                    {"operator":"stream","operand":"$streamName"},
-                                    {"operator":"topic","operand":"$topicName"}
-                                ]
-                        """.trimIndent().replace("\n", "")
+                        val topicEsc = escapeJsonOperand(topicName)
+                        "[{\"operator\":\"stream\",\"operand\":\"$streamEsc\"},{\"operator\":\"topic\",\"operand\":\"$topicEsc\"}]"
                 }
 
         val response = service.getMessages(
@@ -228,19 +221,12 @@ class ChatRepositoryImpl @Inject constructor(
                 credentials = BasicCredentials(auth.email, auth.apiKey)
             )
 
+            val streamEsc = escapeJsonOperand(streamName)
             val narrowJson = if (topicName.isBlank()) {
-                """
-                    [
-                        {"operator":"stream","operand":"$streamName"}
-                    ]
-                """.trimIndent().replace("\n", "")
+                "[{\"operator\":\"stream\",\"operand\":\"$streamEsc\"}]"
             } else {
-                """
-                    [
-                        {"operator":"stream","operand":"$streamName"},
-                        {"operator":"topic","operand":"$topicName"}
-                    ]
-                """.trimIndent().replace("\n", "")
+                val topicEsc = escapeJsonOperand(topicName)
+                "[{\"operator\":\"stream\",\"operand\":\"$streamEsc\"},{\"operator\":\"topic\",\"operand\":\"$topicEsc\"}]"
             }
 
             val response = service.getMessages(
@@ -292,19 +278,12 @@ class ChatRepositoryImpl @Inject constructor(
                 credentials = BasicCredentials(auth.email, auth.apiKey)
             )
 
+            val streamEsc = escapeJsonOperand(streamName)
             val narrowJson = if (topicName.isBlank()) {
-                """
-                    [
-                        {"operator":"stream","operand":"$streamName"}
-                    ]
-                """.trimIndent().replace("\n", "")
+                "[{\"operator\":\"stream\",\"operand\":\"$streamEsc\"}]"
             } else {
-                """
-                    [
-                        {"operator":"stream","operand":"$streamName"},
-                        {"operator":"topic","operand":"$topicName"}
-                    ]
-                """.trimIndent().replace("\n", "")
+                val topicEsc = escapeJsonOperand(topicName)
+                "[{\"operator\":\"stream\",\"operand\":\"$streamEsc\"},{\"operator\":\"topic\",\"operand\":\"$topicEsc\"}]"
             }
 
             val response = service.getMessages(
@@ -627,7 +606,7 @@ class ChatRepositoryImpl @Inject constructor(
                         topic = dto.subject.orEmpty(),
                         streamName = if (dto.type == "stream") dto.displayRecipient?.toString() else null,
                         timestampSeconds = dto.timestamp,
-                        isRead = true,
+                        isRead = dto.flags?.contains("read") == true,
                         isStarred = dto.flags?.contains("starred") == true,
                         isMentioned = dto.flags?.contains("mentioned") == true,
                         isWildcardMentioned = dto.flags?.contains("wildcard_mentioned") == true,

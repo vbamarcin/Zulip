@@ -455,7 +455,7 @@ private fun TopicsList(
     LazyColumn(verticalArrangement = Arrangement.spacedBy(sectionGap)) {
         item {
             Row(modifier = Modifier.fillMaxWidth().clickable { onBackToStreams() }.padding(8.dp)) {
-                Text("<- Wróćóć do streamów", color = Accent, fontWeight = FontWeight.Medium, style = backStyle)
+                Text("<- Wróć do streamów", color = Accent, fontWeight = FontWeight.Medium, style = backStyle)
             }
         }
         items(uiState.topics, key = { it.key }) { topic ->

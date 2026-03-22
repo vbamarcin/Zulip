@@ -130,7 +130,7 @@ class ZulipNotificationHelper @Inject constructor(
             .setContentIntent(mainPendingIntent(message, selfEmail))
             .build()
 
-        notificationManager.notify(message.id.toInt(), notification)
+        notificationManager.notify((message.id and 0x7FFFFFFF).toInt(), notification)
         updateGroupSummary(channelId = channelId, groupKey = groupKey, isPrivate = isPrivate)
     }
 
@@ -258,7 +258,7 @@ class ZulipNotificationHelper @Inject constructor(
         }
 
         val pendingFlags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        return PendingIntent.getActivity(context, message.id.toInt(), intent, pendingFlags)
+        return PendingIntent.getActivity(context, (message.id and 0x7FFFFFFF).toInt(), intent, pendingFlags)
     }
 
     private fun parsePrivateRecipients(displayRecipient: Any?): List<Map<*, *>> {

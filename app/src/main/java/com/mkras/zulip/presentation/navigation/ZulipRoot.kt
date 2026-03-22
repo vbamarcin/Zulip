@@ -280,11 +280,8 @@ private fun BiometricLockScreen(
                     onAuthenticated()
                 }
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                    if (errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON) {
-                        onLogout()
-                    } else {
-                        // Keep lock screen active; prompt will be retried on next resume or manual retry.
-                    }
+                    // Never auto-logout on biometric error — user retries via resume or manual button.
+                    // Keep lock screen active for all error types.
                 }
             }
         )

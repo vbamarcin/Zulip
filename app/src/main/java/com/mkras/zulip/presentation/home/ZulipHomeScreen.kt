@@ -545,11 +545,16 @@ fun ZulipHomeScreen(
                                     topic = topicName,
                                     onSuccess = {
                                         channelsViewModel.refreshSelectedNarrow()
+                                    },
+                                    onError = { errorMsg ->
+                                        Toast.makeText(context, "Błąd wysyłania: $errorMsg", Toast.LENGTH_LONG).show()
                                     }
                                 )
                             },
                             onAddReaction = { msgId, emoji -> chatViewModel.addReaction(msgId, emoji) },
-                            onEditMessage = { msgId -> chatViewModel.editMessage(msgId, "") },
+                            onEditMessage = { msgId ->
+                                Toast.makeText(context, "Edycja wiadomości kanałowych wkrótce", Toast.LENGTH_SHORT).show()
+                            },
                             onDeleteMessage = { msgId, onSuccess, onError ->
                                 chatViewModel.deleteMessage(
                                     messageId = msgId,
