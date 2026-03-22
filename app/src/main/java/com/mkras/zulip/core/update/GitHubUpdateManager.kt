@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.json.JSONArray
 import org.json.JSONObject
 
 private const val GITHUB_API_BASE = "https://api.github.com"
@@ -40,6 +41,17 @@ object GitHubUpdateManager {
                 .build()
 
             httpClient.newCall(request).execute().use { response ->
+                if (response.code == 404) {
+                    // Fallback for repositories that keep APK files in releases/ folder
+                    // but do not publish GitHub Release objects.
+                    return@use checkForUpdateFromReleasesDirectory(
+                        owner = owner,
+                        repo = repo,
+                        currentVersionName = currentVersionName,
+                        token = token
+                    )
+                }
+
                 if (!response.isSuccessful) {
                     error("Nie można pobrać informacji o release (${response.code})")
                 }
@@ -81,6 +93,73 @@ object GitHubUpdateManager {
         }
     }
 
+    private fun checkForUpdateFromReleasesDirectory(
+        owner: String,
+        repo: String,
+        currentVersionName: String,
+        token: String
+    ): GitHubReleaseInfo? {
+        val request = Request.Builder()
+            .url("$GITHUB_API_BASE/repos/$owner/$repo/contents/releases")
+            .addHeader("Authorization", "Bearer $token")
+            .addHeader("Accept", "application/vnd.github+json")
+            .addHeader("X-GitHub-Api-Version", "2022-11-28")
+            .build()
+
+        httpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                error("Nie można pobrać plików z folderu releases (${response.code})")
+            }
+
+            val body = response.body?.string().orEmpty()
+            if (body.isBlank()) {
+                return null
+            }
+
+            val items = JSONArray(body)
+            var bestVersion: String? = null
+            var bestName: String? = null
+            var bestUrl: String? = null
+
+            val currentVersion = normalizeVersion(currentVersionName)
+
+            for (i in 0 until items.length()) {
+                val item = items.optJSONObject(i) ?: continue
+                val name = item.optString("name").orEmpty()
+                if (!name.endsWith(".apk", ignoreCase = true)) {
+                    continue
+                }
+
+                val version = extractVersionFromFileName(name) ?: continue
+                if (!isVersionNewer(version, currentVersion)) {
+                    continue
+                }
+
+                val candidateBetter = bestVersion == null || compareVersions(version, bestVersion!!) > 0
+                if (candidateBetter) {
+                    val directUrl = item.optString("download_url").orEmpty()
+                    val apiUrl = item.optString("url").orEmpty()
+                    val chosenUrl = if (directUrl.isNotBlank()) directUrl else apiUrl
+                    if (chosenUrl.isNotBlank()) {
+                        bestVersion = version
+                        bestName = name
+                        bestUrl = chosenUrl
+                    }
+                }
+            }
+
+            if (bestVersion == null || bestName == null || bestUrl == null) {
+                return null
+            }
+
+            return GitHubReleaseInfo(
+                tagName = "v$bestVersion",
+                apkName = bestName!!,
+                apkUrl = bestUrl!!
+            )
+        }
+    }
+
     suspend fun downloadAndInstall(
         context: Context,
         release: GitHubReleaseInfo,
@@ -101,7 +180,10 @@ object GitHubUpdateManager {
             val request = Request.Builder()
                 .url(release.apkUrl)
                 .addHeader("Authorization", "Bearer $token")
-                .addHeader("Accept", "application/octet-stream")
+                .addHeader(
+                    "Accept",
+                    if (release.apkUrl.startsWith(GITHUB_API_BASE)) "application/vnd.github.raw" else "application/octet-stream"
+                )
                 .addHeader("X-GitHub-Api-Version", "2022-11-28")
                 .build()
 
@@ -146,6 +228,27 @@ object GitHubUpdateManager {
     }
 
     private fun isVersionNewer(latest: String, current: String): Boolean {
+        return compareVersions(latest, current) > 0
+    }
+
+    private fun compareVersions(left: String, right: String): Int {
+        val leftParts = left.split('.').map { it.toIntOrNull() ?: 0 }
+        val rightParts = right.split('.').map { it.toIntOrNull() ?: 0 }
+        val maxSize = maxOf(leftParts.size, rightParts.size)
+        for (i in 0 until maxSize) {
+            val l = leftParts.getOrElse(i) { 0 }
+            val r = rightParts.getOrElse(i) { 0 }
+            if (l != r) return l.compareTo(r)
+        }
+        return 0
+    }
+
+    private fun extractVersionFromFileName(fileName: String): String? {
+        val match = Regex("""v?(\\d+\\.\\d+\\.\\d+)""").find(fileName) ?: return null
+        return normalizeVersion(match.groupValues[1])
+    }
+
+    private fun legacyIsVersionNewer(latest: String, current: String): Boolean {
         val latestParts = latest.split('.').map { it.toIntOrNull() ?: 0 }
         val currentParts = current.split('.').map { it.toIntOrNull() ?: 0 }
         val maxSize = maxOf(latestParts.size, currentParts.size)
