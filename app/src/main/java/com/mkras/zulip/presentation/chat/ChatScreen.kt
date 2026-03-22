@@ -50,13 +50,18 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.rememberDrawerState
 import android.widget.TextView
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -75,6 +80,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.imePadding
@@ -87,6 +93,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.unit.LayoutDirection
 import android.text.method.LinkMovementMethod
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -267,254 +274,190 @@ private fun DmConversationList(
         }
     }
     val queryToHighlight = newDmQuery.trim()
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val drawerScope = rememberCoroutineScope()
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        if (conversations.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Brak wiadomości", color = SubtleColor)
-            }
+    LaunchedEffect(isNewDmPickerVisible) {
+        if (isNewDmPickerVisible) {
+            drawerState.open()
         } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(vertical = 4.dp, horizontal = 2.dp),
-                verticalArrangement = Arrangement.spacedBy(gap)
-            ) {
-                items(conversations, key = { it.conversationKey }) { conv ->
-                    val peerEmail = remember(conv.conversationKey, currentUserEmail) {
-                        val selfNorm = currentUserEmail.trim().lowercase()
-                        conv.conversationKey.split(",")
-                            .map { it.trim().lowercase() }
-                            .filter { it.isNotBlank() && it != selfNorm }
-                            .firstOrNull() ?: conv.conversationKey.trim().lowercase()
-                    }
-                    val presenceStatus = presenceByEmail[peerEmail]
-                    val typingEmailFromText = remember(typingText) {
-                        typingText?.substringBefore(" pisze")?.trim()?.lowercase()
-                    }
-                    val isTyping = typingEmailFromText == peerEmail
-                    val infiniteTransition = rememberInfiniteTransition(label = "typing_pulse")
-                    val typingBorderAlpha by infiniteTransition.animateFloat(
-                        initialValue = 0.3f,
-                        targetValue = 1f,
-                        animationSpec = infiniteRepeatable(
-                            animation = tween(1000, easing = LinearEasing),
-                            repeatMode = RepeatMode.Reverse
-                        ),
-                        label = "typing_alpha"
-                    )
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSelect(conv.conversationKey) },
-                        shape = RoundedCornerShape(if (compactMode) 20.dp else 24.dp),
-                        color = CardBg,
-                        border = BorderStroke(1.dp, BubbleOutline)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = cardHorizontal, vertical = cardVertical),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                contentAlignment = Alignment.BottomEnd,
-                                modifier = Modifier.then(
-                                    if (isTyping) {
-                                        Modifier.border(
-                                            width = 2.dp,
-                                            color = Color(0xFF8CD9FF).copy(alpha = typingBorderAlpha),
-                                            shape = CircleShape
-                                        )
-                                    } else {
-                                        Modifier
-                                    }
-                                )
-                            ) {
-                                AvatarImage(
-                                    avatarUrl = conv.avatarUrl,
-                                    initials = conv.displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-                                    size = avatarSize
-                                )
-                                if (presenceStatus != null) {
-                                    val dotColor = when (presenceStatus) {
-                                        "active" -> Color(0xFF43D87A)
-                                        "idle"   -> Color(0xFFF5C543)
-                                        else     -> Color(0xFF6B7280)
-                                    }
-                                    Box(
-                                        modifier = Modifier
-                                            .size(9.dp)
-                                            .background(dotColor, CircleShape)
-                                            .border(1.5.dp, CardBg, CircleShape)
-                                    )
-                                }
-                            }
-                            Column(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(start = if (compactMode) 10.dp else 12.dp)
-                            ) {
-                                Text(
-                                    text = conv.displayName,
-                                    style = textStyle,
-                                    fontWeight = FontWeight.Bold,
-                                    color = NameColor,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = if (conv.unreadCount > 0) "Nowe wiadomości: ${conv.unreadCount}" else "Otwórz konwersację",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = SubtleColor
-                                )
-                            }
-                            if (conv.unreadCount > 0) {
-                                Badge(containerColor = Color(0xFF8A3B2E)) {
-                                    Text(
-                                        text = conv.unreadCount.toString(),
-                                        color = Color.White
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        FloatingActionButton(
-            onClick = onOpenNewDmPicker,
-            containerColor = Color(0xFF7FD6FF),
-            contentColor = Color(0xFF08101F),
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(12.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Add,
-                contentDescription = "Nowa wiadomość"
-            )
+            drawerState.close()
         }
     }
 
-    if (isNewDmPickerVisible) {
-        val focusRequester = remember { FocusRequester() }
-        val keyboardController = LocalSoftwareKeyboardController.current
-        LaunchedEffect(Unit) {
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    LaunchedEffect(isNewDmPickerVisible) {
+        if (isNewDmPickerVisible) {
+            delay(120)
             focusRequester.requestFocus()
             keyboardController?.show()
         }
+    }
 
-        AlertDialog(
-            onDismissRequest = onCloseNewDmPicker,
-            confirmButton = {
-                TextButton(onClick = onCloseNewDmPicker) {
-                    Text("Zamknij", color = Color(0xFF8CD9FF))
-                }
-            },
-            containerColor = Color(0xFF101E33),
-            title = {
-                Text(
-                    text = "Nowa rozmowa",
-                    color = NameColor,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold
-                )
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = newDmQuery,
-                        onValueChange = onNewDmQueryChange,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .focusRequester(focusRequester),
-                        singleLine = true,
-                        placeholder = { Text("Szukaj osoby", maxLines = 1) },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Rounded.Search,
-                                contentDescription = null,
-                                tint = SubtleColor
-                            )
-                        },
-                        trailingIcon = {
-                            if (newDmQuery.isNotBlank()) {
-                                IconButton(onClick = { onNewDmQueryChange("") }) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Close,
-                                        contentDescription = "Wyczyść",
-                                        tint = SubtleColor
-                                    )
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            gesturesEnabled = isNewDmPickerVisible,
+            drawerContent = {
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    ModalDrawerSheet(
+                        modifier = Modifier.fillMaxWidth(0.86f),
+                        drawerContainerColor = Color(0xFF101E33),
+                        drawerContentColor = NameColor
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Nowa rozmowa",
+                                    color = NameColor,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                TextButton(onClick = {
+                                    drawerScope.launch { drawerState.close() }
+                                    onCloseNewDmPicker()
+                                }) {
+                                    Text("Zamknij", color = Color(0xFF8CD9FF))
                                 }
                             }
-                        },
-                        shape = RoundedCornerShape(14.dp),
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = Color(0xFF16273D),
-                            unfocusedContainerColor = Color(0xFF16273D),
-                            focusedIndicatorColor = Color(0xFF8CD9FF),
-                            unfocusedIndicatorColor = Color(0xFF2A4B6E),
-                            focusedTextColor = NameColor,
-                            unfocusedTextColor = NameColor,
-                            cursorColor = Color(0xFF8CD9FF)
-                        )
-                    )
 
-                    when {
-                        isNewDmLoading -> {
-                            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(color = Color(0xFF8CD9FF))
-                            }
-                        }
-                        newDmError != null -> {
-                            Text(text = newDmError, color = Color(0xFFFFA8B5), style = MaterialTheme.typography.bodySmall)
-                        }
-                        filteredPeople.isEmpty() -> {
-                            Text(text = "Brak osób dla podanego filtra.", color = SubtleColor, style = MaterialTheme.typography.bodySmall)
-                        }
-                        else -> {
-                            LazyColumn(
-                                modifier = Modifier.fillMaxWidth().height(280.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                items(filteredPeople, key = { it.userId }) { person ->
-                                    Surface(
-                                        modifier = Modifier.fillMaxWidth().clickable { onSelectNewDmPerson(person) },
-                                        color = Color(0xFF14253B),
-                                        shape = RoundedCornerShape(14.dp),
-                                        border = BorderStroke(1.dp, Color(0xFF31577D))
+                            OutlinedTextField(
+                                value = newDmQuery,
+                                onValueChange = onNewDmQueryChange,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .focusRequester(focusRequester),
+                                singleLine = true,
+                                placeholder = { Text("Szukaj osoby", maxLines = 1) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Search,
+                                        contentDescription = null,
+                                        tint = SubtleColor
+                                    )
+                                },
+                                trailingIcon = {
+                                    if (newDmQuery.isNotBlank()) {
+                                        IconButton(onClick = { onNewDmQueryChange("") }) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Close,
+                                                contentDescription = "Wyczyść",
+                                                tint = SubtleColor
+                                            )
+                                        }
+                                    }
+                                },
+                                shape = RoundedCornerShape(14.dp),
+                                colors = TextFieldDefaults.colors(
+                                    focusedContainerColor = Color(0xFF16273D),
+                                    unfocusedContainerColor = Color(0xFF16273D),
+                                    focusedIndicatorColor = Color(0xFF8CD9FF),
+                                    unfocusedIndicatorColor = Color(0xFF2A4B6E),
+                                    focusedTextColor = NameColor,
+                                    unfocusedTextColor = NameColor,
+                                    cursorColor = Color(0xFF8CD9FF)
+                                )
+                            )
+
+                            when {
+                                isNewDmLoading -> {
+                                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                        CircularProgressIndicator(color = Color(0xFF8CD9FF))
+                                    }
+                                }
+                                newDmError != null -> {
+                                    Text(
+                                        text = newDmError,
+                                        color = Color(0xFFFFA8B5),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                                filteredPeople.isEmpty() -> {
+                                    Text(
+                                        text = "Brak osób dla podanego filtra.",
+                                        color = SubtleColor,
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                                else -> {
+                                    LazyColumn(
+                                        modifier = Modifier.fillMaxSize(),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
+                                        items(filteredPeople, key = { it.userId }) { person ->
+                                            val peerEmail = person.email.trim().lowercase()
+                                            val presenceStatus = presenceByEmail[peerEmail]
+                                            val dotColor = when (presenceStatus) {
+                                                "active" -> Color(0xFF43D87A)
+                                                "idle" -> Color(0xFFF5C543)
+                                                else -> Color(0xFF6B7280)
+                                            }
+
                                             Surface(
-                                                modifier = Modifier.size(34.dp),
-                                                shape = CircleShape,
-                                                color = Color(0xFF2D4B6E)
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        onSelectNewDmPerson(person)
+                                                        onCloseNewDmPicker()
+                                                    },
+                                                color = Color(0xFF14253B),
+                                                shape = RoundedCornerShape(14.dp),
+                                                border = BorderStroke(1.dp, Color(0xFF31577D))
                                             ) {
-                                                Box(contentAlignment = Alignment.Center) {
+                                                Row(
+                                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Box(contentAlignment = Alignment.BottomEnd) {
+                                                        Surface(
+                                                            modifier = Modifier.size(34.dp),
+                                                            shape = CircleShape,
+                                                            color = Color(0xFF2D4B6E)
+                                                        ) {
+                                                            Box(contentAlignment = Alignment.Center) {
+                                                                Text(
+                                                                    text = person.fullName.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                                                                    color = Color(0xFFBDD5F2),
+                                                                    fontWeight = FontWeight.Bold,
+                                                                    style = MaterialTheme.typography.labelLarge
+                                                                )
+                                                            }
+                                                        }
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .size(9.dp)
+                                                                .background(dotColor, CircleShape)
+                                                                .border(1.5.dp, Color(0xFF14253B), CircleShape)
+                                                        )
+                                                    }
                                                     Text(
-                                                        text = person.fullName.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-                                                        color = Color(0xFFBDD5F2),
-                                                        fontWeight = FontWeight.Bold,
-                                                        style = MaterialTheme.typography.labelLarge
+                                                        text = highlightedName(person.fullName, queryToHighlight),
+                                                        color = NameColor,
+                                                        modifier = Modifier
+                                                            .weight(1f)
+                                                            .padding(start = 10.dp),
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis,
+                                                        fontWeight = FontWeight.Medium
+                                                    )
+                                                    Text(
+                                                        text = "DM",
+                                                        color = Color(0xFF8CD9FF),
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                        fontWeight = FontWeight.SemiBold
                                                     )
                                                 }
                                             }
-                                            Text(
-                                                text = highlightedName(person.fullName, queryToHighlight),
-                                                color = NameColor,
-                                                modifier = Modifier.weight(1f).padding(start = 10.dp),
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                                fontWeight = FontWeight.Medium
-                                            )
-                                            Text(
-                                                text = "Napisz",
-                                                color = Color(0xFF8CD9FF),
-                                                style = MaterialTheme.typography.labelMedium,
-                                                fontWeight = FontWeight.SemiBold
-                                            )
                                         }
                                     }
                                 }
@@ -523,7 +466,136 @@ private fun DmConversationList(
                     }
                 }
             }
-        )
+        ) {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    if (conversations.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("Brak wiadomości", color = SubtleColor)
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(vertical = 4.dp, horizontal = 2.dp),
+                            verticalArrangement = Arrangement.spacedBy(gap)
+                        ) {
+                            items(conversations, key = { it.conversationKey }) { conv ->
+                                val peerEmail = remember(conv.conversationKey, currentUserEmail) {
+                                    val selfNorm = currentUserEmail.trim().lowercase()
+                                    conv.conversationKey.split(",")
+                                        .map { it.trim().lowercase() }
+                                        .filter { it.isNotBlank() && it != selfNorm }
+                                        .firstOrNull() ?: conv.conversationKey.trim().lowercase()
+                                }
+                                val presenceStatus = presenceByEmail[peerEmail]
+                                val typingEmailFromText = remember(typingText) {
+                                    typingText?.substringBefore(" pisze")?.trim()?.lowercase()
+                                }
+                                val isTyping = typingEmailFromText == peerEmail
+                                val infiniteTransition = rememberInfiniteTransition(label = "typing_pulse")
+                                val typingBorderAlpha by infiniteTransition.animateFloat(
+                                    initialValue = 0.3f,
+                                    targetValue = 1f,
+                                    animationSpec = infiniteRepeatable(
+                                        animation = tween(1000, easing = LinearEasing),
+                                        repeatMode = RepeatMode.Reverse
+                                    ),
+                                    label = "typing_alpha"
+                                )
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { onSelect(conv.conversationKey) },
+                                    shape = RoundedCornerShape(if (compactMode) 20.dp else 24.dp),
+                                    color = CardBg,
+                                    border = BorderStroke(1.dp, BubbleOutline)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = cardHorizontal, vertical = cardVertical),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            contentAlignment = Alignment.BottomEnd,
+                                            modifier = Modifier.then(
+                                                if (isTyping) {
+                                                    Modifier.border(
+                                                        width = 2.dp,
+                                                        color = Color(0xFF8CD9FF).copy(alpha = typingBorderAlpha),
+                                                        shape = CircleShape
+                                                    )
+                                                } else {
+                                                    Modifier
+                                                }
+                                            )
+                                        ) {
+                                            AvatarImage(
+                                                avatarUrl = conv.avatarUrl,
+                                                initials = conv.displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                                                size = avatarSize
+                                            )
+                                            if (presenceStatus != null) {
+                                                val dotColor = when (presenceStatus) {
+                                                    "active" -> Color(0xFF43D87A)
+                                                    "idle" -> Color(0xFFF5C543)
+                                                    else -> Color(0xFF6B7280)
+                                                }
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(9.dp)
+                                                        .background(dotColor, CircleShape)
+                                                        .border(1.5.dp, CardBg, CircleShape)
+                                                )
+                                            }
+                                        }
+                                        Column(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .padding(start = if (compactMode) 10.dp else 12.dp)
+                                        ) {
+                                            Text(
+                                                text = conv.displayName,
+                                                style = textStyle,
+                                                fontWeight = FontWeight.Bold,
+                                                color = NameColor,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Text(
+                                                text = if (conv.unreadCount > 0) "Nowe wiadomości: ${conv.unreadCount}" else "Otwórz konwersację",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = SubtleColor
+                                            )
+                                        }
+                                        if (conv.unreadCount > 0) {
+                                            Badge(containerColor = Color(0xFF8A3B2E)) {
+                                                Text(
+                                                    text = conv.unreadCount.toString(),
+                                                    color = Color.White
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    FloatingActionButton(
+                        onClick = onOpenNewDmPicker,
+                        containerColor = Color(0xFF7FD6FF),
+                        contentColor = Color(0xFF08101F),
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Add,
+                            contentDescription = "Nowa wiadomość"
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
