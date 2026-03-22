@@ -226,7 +226,12 @@ fun ChatScreen(
             onPendingDirectMessageContentConsumed = onPendingDirectMessageContentConsumed,
             canModerateAllMessages = canModerateAllMessages,
             onAttachmentOperationStart = onAttachmentOperationStart,
-            onAttachmentOperationEnd = onAttachmentOperationEnd
+            onAttachmentOperationEnd = onAttachmentOperationEnd,
+            sendMessageError = uiState.sendMessageError,
+            resyncError = uiState.resyncError,
+            onClearSendError = { /* Will be connected in ZulipHomeScreen */ },
+            onClearResyncError = { /* Will be connected in ZulipHomeScreen */ },
+            onSaveDmScrollPosition = { key, index -> /* Will be connected in ZulipHomeScreen */ }
         )
     }
 }
@@ -638,7 +643,12 @@ private fun DmThreadView(
     onPendingDirectMessageContentConsumed: () -> Unit = {},
     canModerateAllMessages: Boolean = false,
     onAttachmentOperationStart: () -> Unit = {},
-    onAttachmentOperationEnd: () -> Unit = {}
+    onAttachmentOperationEnd: () -> Unit = {},
+    sendMessageError: String? = null,
+    resyncError: String? = null,
+    onClearSendError: () -> Unit = {},
+    onClearResyncError: () -> Unit = {},
+    onSaveDmScrollPosition: (String, Int) -> Unit = { _, _ -> }
 ) {
     val rowBottom = if (compactMode) 10.dp else 14.dp
     val gap = if (compactMode) 4.dp else 6.dp
@@ -838,6 +848,60 @@ private fun DmThreadView(
             }
         }
         } // close Box
+        if (resyncError != null) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0xFF5A2B2B)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Błąd synchronizacji: $resyncError",
+                        color = Color(0xFFFFB3B3),
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = onClearResyncError) {
+                        Text("OK", color = Color(0xFFFFB3B3), fontSize = 10.sp)
+                    }
+                }
+            }
+        }
+        if (sendMessageError != null) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0xFF5A3B2B)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Błąd wysyłania: $sendMessageError",
+                        color = Color(0xFFFFA8B5),
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = onClearSendError) {
+                        Text("OK", color = Color(0xFFFFA8B5), fontSize = 10.sp)
+                    }
+                }
+            }
+        }
         if (typingText != null) {
             Text(text = typingText, color = Color(0xFF8CD9FF), modifier = Modifier.padding(start = 8.dp, top = 4.dp, bottom = 8.dp))
         }

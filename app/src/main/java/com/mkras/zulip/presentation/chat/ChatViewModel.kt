@@ -97,9 +97,23 @@ class ChatViewModel @Inject constructor(
         loadModerationPermission()
         initialPresenceSync()
         viewModelScope.launch {
-            chatRepository.resyncLatestMessages()
-            chatRepository.resyncStarredMessages()
+            try {
+                chatRepository.resyncLatestMessages()
+                _uiState.update { it.copy(resyncError = null) }
+            } catch (e: Exception) {
+                val errorMsg = e.message ?: "Failed to sync messages"
+                _uiState.update { it.copy(resyncError = errorMsg) }
+            }
+            try {
+                chatRepository.resyncStarredMessages()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(resyncError = e.message ?: "Failed to sync starred") }
+            }
         }
+    }
+
+    fun clearResyncError() {
+        _uiState.update { it.copy(resyncError = null) }
     }
 
     fun selectConversation(key: String) {
@@ -279,11 +293,12 @@ class ChatViewModel @Inject constructor(
                         }
 
                         val isMuted = secureSessionStorage.isDirectMessageMuted(key)
+                        val displayAvatar = if (avatarUrl.isBlank()) "https://zulip.com/static/images/avatar-default.png" else avatarUrl
                         DmConversation(
                             conversationKey = key,
                             senderEmail = latest?.senderEmail ?: "",
                             displayName = latest?.dmDisplayName?.ifBlank { latest.senderFullName } ?: key,
-                            avatarUrl = avatarUrl,
+                            avatarUrl = displayAvatar,
                             unreadCount = msgs.count {
                                 !it.isRead && !it.senderEmail.equals(currentUserEmail, ignoreCase = true) && !isMuted
                             },
@@ -398,11 +413,28 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             chatRepository.sendMessage(type, to, content, topic)
                 .onSuccess { messageId ->
+                    _uiState.update { it.copy(sendMessageError = null) }
                     resyncOnResume()
                     onSuccess(messageId)
                 }
-                .onFailure { error -> onError(error.message ?: "Failed to send message") }
+                .onFailure { error ->
+                    val errorMsg = error.message ?: "Failed to send message"
+                    _uiState.update { it.copy(sendMessageError = errorMsg) }
+                    onError(errorMsg)
+                }
         }
+    }
+
+    fun clearSendMessageError() {
+        _uiState.update { it.copy(sendMessageError = null) }
+    }
+
+    fun saveDmScrollPosition(key: String, index: Int) {
+        _uiState.update { it.copy(dmScrollPosition = it.dmScrollPosition + (key to index)) }
+    }
+
+    fun getDmScrollPosition(key: String): Int {
+        return _uiState.value.dmScrollPosition[key] ?: 0
     }
 
     fun uploadAttachmentAndSendMessage(
@@ -568,9 +600,12 @@ data class ChatUiState(
     val newDmPeople: List<DirectMessageCandidate> = emptyList(),
     val newDmQuery: String = "",
     val newDmError: String? = null,
+    val sendMessageError: String? = null,
+    val resyncError: String? = null,
     val pendingDirectMessageContent: String? = null,
     val dmScrollToMessageId: Long? = null,
     val canModerateAllMessages: Boolean = false,
     val presenceByEmail: Map<String, String> = emptyMap(),
-    val starredMessages: List<MessageEntity> = emptyList()
+    val starredMessages: List<MessageEntity> = emptyList(),
+    val dmScrollPosition: Map<String, Int> = emptyMap()
 )

@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.draw.clip
@@ -485,7 +486,15 @@ fun ZulipHomeScreen(
                             mentionCandidates = chatUiState.newDmPeople,
                             onRequestMentionCandidates = chatViewModel::ensureMentionCandidatesLoaded,
                             onSendMessage = { type, to, content, topic ->
-                                chatViewModel.sendMessage(type, to, content, topic)
+                                chatViewModel.sendMessage(
+                                    type, to, content, topic,
+                                    onSuccess = { _ ->
+                                        Toast.makeText(context, "Wiadomość wysłana", Toast.LENGTH_SHORT).show()
+                                    },
+                                    onError = { errorMsg ->
+                                        Toast.makeText(context, "Błąd wysyłania: $errorMsg", Toast.LENGTH_LONG).show()
+                                    }
+                                )
                             },
                             onAddReaction = { msgId, emoji ->
                                 chatViewModel.addReaction(msgId, emoji)

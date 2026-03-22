@@ -76,7 +76,7 @@ class ChatRepositoryImpl @Inject constructor(
         )
 
         val response = service.getMessages(
-            numBefore = 100,
+            numBefore = 200,
             applyMarkdown = false
         )
         if (response.result != "success") {
