@@ -43,6 +43,9 @@ interface MessageDao {
     @Query("UPDATE messages SET isWildcardMentioned = :isWildcardMentioned WHERE id IN (:ids)")
     suspend fun updateWildcardMentionedFlags(ids: List<Long>, isWildcardMentioned: Boolean)
 
+    @Query("SELECT reactionSummary FROM messages WHERE id = :messageId")
+    suspend fun getReactionSummary(messageId: Long): String?
+
     @Query("UPDATE messages SET reactionSummary = :summary WHERE id = :messageId")
     suspend fun updateReactionSummary(messageId: Long, summary: String?)
 

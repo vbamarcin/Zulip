@@ -37,6 +37,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
@@ -339,6 +341,13 @@ private fun StreamsList(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        if (uiState.isRefreshing) {
+            LinearProgressIndicator(
+                modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter),
+                color = Accent,
+                trackColor = PanelCard
+            )
+        }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(sectionGap)) {
             items(visibleStreams, key = { it.id }) { stream ->
                 val unreadCount = unreadByStream[stream.name] ?: 0

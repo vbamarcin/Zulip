@@ -67,6 +67,12 @@ fun ZulipRoot(
     val context = LocalContext.current
     var showStartupSplash by rememberSaveable { mutableStateOf(true) }
 
+    LaunchedEffect(uiState.isReady) {
+        if (uiState.isReady) {
+            showStartupSplash = false
+        }
+    }
+
     LaunchedEffect(Unit) {
         delay(3000)
         showStartupSplash = false

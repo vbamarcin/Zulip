@@ -258,10 +258,27 @@ class EventProcessor @Inject constructor(
 
     private suspend fun processReactionEvent(event: EventDto) {
         val messageId = event.messageId ?: return
-        val summary = listOfNotNull(event.op, event.emojiName).joinToString(separator = ":")
+        val emojiName = event.emojiName?.takeIf { it.isNotBlank() } ?: return
+        val op = event.op ?: return
+
+        val existing = messageDao.getReactionSummary(messageId)
+        val reactions = if (existing.isNullOrBlank()) {
+            mutableListOf()
+        } else {
+            existing.split("|").filter { it.isNotBlank() }.toMutableList()
+        }
+
+        if (op == "add") {
+            if (!reactions.contains(emojiName)) {
+                reactions.add(emojiName)
+            }
+        } else if (op == "remove") {
+            reactions.remove(emojiName)
+        }
+
         messageDao.updateReactionSummary(
             messageId = messageId,
-            summary = summary.ifBlank { null }
+            summary = reactions.joinToString("|").ifBlank { null }
         )
     }
 }

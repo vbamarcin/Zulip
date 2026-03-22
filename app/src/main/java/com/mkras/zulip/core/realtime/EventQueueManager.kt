@@ -100,7 +100,7 @@ class EventQueueManager @Inject constructor(
                         lastEventId = responseLastId
                     }
                 }
-            } catch (_: Throwable) {
+            } catch (_: Exception) {
                 queueId = null
                 val backoffMs = (2_000L * (attempt + 1)).coerceAtMost(15_000L)
                 attempt++
