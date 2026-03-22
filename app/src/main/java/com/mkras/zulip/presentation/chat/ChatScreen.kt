@@ -3,6 +3,13 @@ package com.mkras.zulip.presentation.chat
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -140,7 +147,8 @@ fun ChatScreen(
     onDeleteMessage: (Long) -> Unit = { _ -> },
     pendingDirectMessageContent: String? = null,
     onPendingDirectMessageContentConsumed: () -> Unit = {},
-    canModerateAllMessages: Boolean = false
+    canModerateAllMessages: Boolean = false,
+    typingText: String? = null
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -179,7 +187,8 @@ fun ChatScreen(
             onNewDmQueryChange = onNewDmQueryChange,
             onSelectNewDmPerson = onSelectNewDmPerson,
             presenceByEmail = uiState.presenceByEmail,
-            currentUserEmail = currentUserEmail
+            currentUserEmail = currentUserEmail,
+            typingText = typingText
         )
     } else {
         val thread = remember(uiState.privateMessages, selectedKey) {
@@ -231,7 +240,8 @@ private fun DmConversationList(
     onNewDmQueryChange: (String) -> Unit,
     onSelectNewDmPerson: (DirectMessageCandidate) -> Unit,
     presenceByEmail: Map<String, String> = emptyMap(),
-    currentUserEmail: String = ""
+    currentUserEmail: String = "",
+    typingText: String? = null
 ) {
     val gap = if (compactMode) 2.dp else 3.dp
     val cardVertical = if (compactMode) 8.dp else 12.dp
@@ -277,6 +287,20 @@ private fun DmConversationList(
                             .firstOrNull() ?: conv.conversationKey.trim().lowercase()
                     }
                     val presenceStatus = presenceByEmail[peerEmail]
+                    val typingEmailFromText = remember(typingText) {
+                        typingText?.substringBefore(" pisze")?.trim()?.lowercase()
+                    }
+                    val isTyping = typingEmailFromText == peerEmail
+                    val infiniteTransition = rememberInfiniteTransition(label = "typing_pulse")
+                    val typingBorderAlpha by infiniteTransition.animateFloat(
+                        initialValue = 0.3f,
+                        targetValue = 1f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(1000, easing = LinearEasing),
+                            repeatMode = RepeatMode.Reverse
+                        ),
+                        label = "typing_alpha"
+                    )
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -289,7 +313,20 @@ private fun DmConversationList(
                             modifier = Modifier.padding(horizontal = cardHorizontal, vertical = cardVertical),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Box(contentAlignment = Alignment.BottomEnd) {
+                            Box(
+                                contentAlignment = Alignment.BottomEnd,
+                                modifier = Modifier.then(
+                                    if (isTyping) {
+                                        Modifier.border(
+                                            width = 2.dp,
+                                            color = Color(0xFF8CD9FF).copy(alpha = typingBorderAlpha),
+                                            shape = CircleShape
+                                        )
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                            ) {
                                 AvatarImage(
                                     avatarUrl = conv.avatarUrl,
                                     initials = conv.displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "?",

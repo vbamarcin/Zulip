@@ -385,7 +385,8 @@ fun ZulipHomeScreen(
                             onScrollConsumed = chatViewModel::clearDmScrollTarget,
                             pendingDirectMessageContent = chatUiState.pendingDirectMessageContent,
                             onPendingDirectMessageContentConsumed = chatViewModel::consumePendingDirectMessageContent,
-                            canModerateAllMessages = chatUiState.canModerateAllMessages
+                            canModerateAllMessages = chatUiState.canModerateAllMessages,
+                            typingText = chatUiState.typingText
                         )
                         1 -> ChannelsScreen(
                             uiState = channelsUiState,
