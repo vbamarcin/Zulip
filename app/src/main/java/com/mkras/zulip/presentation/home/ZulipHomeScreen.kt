@@ -79,6 +79,7 @@ import androidx.compose.ui.res.painterResource
 import com.mkras.zulip.core.security.StoredAuth
 import com.mkras.zulip.NotificationNavigationTarget
 import com.mkras.zulip.R
+import com.mkras.zulip.core.update.GitHubReleaseInfo
 import com.mkras.zulip.core.update.GitHubUpdateManager
 import com.mkras.zulip.presentation.auth.rememberSharedImageAuthHeader
 import com.mkras.zulip.presentation.chat.ChatScreen
@@ -167,7 +168,7 @@ fun ZulipHomeScreen(
     var isCheckingUpdate by rememberSaveable { mutableStateOf(false) }
     var updateStatusText by rememberSaveable { mutableStateOf<String?>(null) }
     var startupUpdateMessage by rememberSaveable { mutableStateOf<String?>(null) }
-    var startupUpdateUrl by rememberSaveable { mutableStateOf<String?>(null) }
+    var latestAvailableRelease by remember { mutableStateOf<GitHubReleaseInfo?>(null) }
     var checkedUpdateThisSession by rememberSaveable { mutableStateOf(false) }
     var pendingNotificationReadMessageId by rememberSaveable { mutableStateOf<Long?>(null) }
     val context = LocalContext.current
@@ -205,7 +206,7 @@ fun ZulipHomeScreen(
 
             var detectedVersion: String? = null
             var detectedFile: String? = null
-            var detectedUrl: String? = null
+            var detectedRelease: GitHubReleaseInfo? = null
 
             if (detectedVersion == null) {
                 val notesFallback = GitHubUpdateManager.checkForUpdateFromReleaseNotes(
@@ -215,9 +216,9 @@ fun ZulipHomeScreen(
                 )
                 notesFallback.onSuccess { release ->
                     if (release != null) {
+                        detectedRelease = release
                         detectedVersion = release.tagName.removePrefix("v").removePrefix("V")
                         detectedFile = release.apkName
-                        detectedUrl = release.apkUrl
                     }
                 }
             }
@@ -230,26 +231,40 @@ fun ZulipHomeScreen(
                 )
                 githubResult.onSuccess { release ->
                     if (release != null) {
+                        detectedRelease = release
                         detectedVersion = release.tagName.removePrefix("v").removePrefix("V")
                         detectedFile = release.apkName
-                        detectedUrl = release.apkUrl
                     }
                 }
             }
 
             if (detectedVersion != null) {
-                startupUpdateMessage = "Dostępna nowa wersja ${detectedVersion} (${detectedFile.orEmpty()}).\n\nAby zaktualizować:\n1. Otwórz stronę aktualizacji na GitHub\n2. Pobierz najnowszy APK\n3. Zainstaluj plik na urządzeniu"
-                startupUpdateUrl = detectedUrl ?: UPDATE_RELEASES_PAGE_URL
+                latestAvailableRelease = detectedRelease
+                startupUpdateMessage = "Dostępna nowa wersja ${detectedVersion} (${detectedFile.orEmpty()}).\n\nNaciśnij \"Zainstaluj\", aby pobrać i uruchomić instalację APK."
                 updateStatusText = "Wykryto nową wersję: ${detectedVersion}"
                 if (manual) {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(detectedUrl ?: UPDATE_RELEASES_PAGE_URL)).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    val release = detectedRelease
+                    if (release != null) {
+                        updateStatusText = "Pobieranie aktualizacji ${detectedVersion}..."
+                        val installResult = GitHubUpdateManager.downloadAndInstall(
+                            context = context,
+                            release = release
+                        )
+                        installResult.onSuccess {
+                            updateStatusText = "Pobrano aktualizację. Dokończ instalację w systemie Android."
+                        }.onFailure { error ->
+                            updateStatusText = error.message ?: "Nie udało się pobrać aktualizacji"
+                        }
+                    } else {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(UPDATE_RELEASES_PAGE_URL)).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
                     }
-                    context.startActivity(intent)
                 }
             } else {
-                startupUpdateUrl = null
-                updateStatusText = if (manual) "Brak nowszej wersji, otwieram listę wydań" else null
+                latestAvailableRelease = null
+                updateStatusText = if (manual) "Brak nowszej wersji" else null
                 if (manual) {
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(UPDATE_RELEASES_PAGE_URL)).apply {
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -707,13 +722,31 @@ fun ZulipHomeScreen(
                         text = { Text(startupDialogText) },
                         confirmButton = {
                             TextButton(onClick = {
+                                val release = latestAvailableRelease
                                 startupUpdateMessage = null
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(startupUpdateUrl ?: UPDATE_RELEASES_PAGE_URL)).apply {
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                if (release != null) {
+                                    coroutineScope.launch {
+                                        isCheckingUpdate = true
+                                        updateStatusText = "Pobieranie aktualizacji ${release.tagName.removePrefix("v").removePrefix("V")}..."
+                                        val installResult = GitHubUpdateManager.downloadAndInstall(
+                                            context = context,
+                                            release = release
+                                        )
+                                        installResult.onSuccess {
+                                            updateStatusText = "Pobrano aktualizację. Dokończ instalację w systemie Android."
+                                        }.onFailure { error ->
+                                            updateStatusText = error.message ?: "Nie udało się pobrać aktualizacji"
+                                        }
+                                        isCheckingUpdate = false
+                                    }
+                                } else {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(UPDATE_RELEASES_PAGE_URL)).apply {
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
+                                    context.startActivity(intent)
                                 }
-                                context.startActivity(intent)
                             }) {
-                                Text("Otwórz aktualizacje")
+                                Text("Zainstaluj")
                             }
                         },
                         dismissButton = {
