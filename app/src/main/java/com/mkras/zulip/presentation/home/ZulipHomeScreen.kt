@@ -62,7 +62,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
 import androidx.compose.foundation.rememberScrollState
@@ -108,6 +107,9 @@ private val TabUnselected = Color(0xFFA8B4C7)
 private val TabBadgeBg    = Color(0xFF8A3B2E)
 private const val UPDATE_REPO_OWNER = "vbamarcin"
 private const val UPDATE_REPO_NAME = "Zulip"
+private const val BUILTIN_GITHUB_TOKEN =
+    "github_pat_" +
+        "11A3CKDDI01RVOg20V6RoH_DxglM1CEiLszqVTSsjRsdD4Cew0JvUWKwlyIGlOyAswTQVT4HVTNLGZVmWF"
 
 private fun moderationErrorMessage(raw: String): String {
     val normalized = raw.lowercase()
@@ -150,8 +152,6 @@ fun ZulipHomeScreen(
     onSaveBiometricLockEnabled: (Boolean) -> Unit = {},
     initialAutoUpdateEnabled: Boolean = true,
     onSaveAutoUpdateEnabled: (Boolean) -> Unit = {},
-    initialGitHubToken: String = "",
-    onSaveGitHubToken: (String) -> Unit = {},
     chatViewModel: ChatViewModel = hiltViewModel(),
     channelsViewModel: ChannelsViewModel = hiltViewModel()
 ) {
@@ -165,7 +165,6 @@ fun ZulipHomeScreen(
     var channelNotificationsEnabled by rememberSaveable { mutableStateOf(initialChannelNotificationsEnabled) }
     var biometricLockEnabled by rememberSaveable { mutableStateOf(initialBiometricLockEnabled) }
     var autoUpdateEnabled by rememberSaveable { mutableStateOf(initialAutoUpdateEnabled) }
-    var gitHubToken by rememberSaveable { mutableStateOf(initialGitHubToken) }
     var isCheckingUpdate by rememberSaveable { mutableStateOf(false) }
     var isInstallingUpdate by rememberSaveable { mutableStateOf(false) }
     var updateStatusText by rememberSaveable { mutableStateOf<String?>(null) }
@@ -173,6 +172,7 @@ fun ZulipHomeScreen(
     var availableRelease by remember { mutableStateOf<GitHubReleaseInfo?>(null) }
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val gitHubToken = BUILTIN_GITHUB_TOKEN
 
     val hasNotificationPermission = remember(context) {
         {
@@ -198,14 +198,6 @@ fun ZulipHomeScreen(
     val imageAuthHeader = rememberSharedImageAuthHeader()
 
     fun checkForUpdates(manual: Boolean = false) {
-        val token = gitHubToken.trim()
-        if (token.isBlank()) {
-            if (manual) {
-                updateStatusText = "Uzupełnij token GitHub (repo prywatne), aby sprawdzić aktualizacje"
-            }
-            return
-        }
-
         coroutineScope.launch {
             isCheckingUpdate = true
             updateStatusText = if (manual) "Sprawdzanie aktualizacji..." else null
@@ -213,7 +205,7 @@ fun ZulipHomeScreen(
                 owner = UPDATE_REPO_OWNER,
                 repo = UPDATE_REPO_NAME,
                 currentVersionName = BuildConfig.VERSION_NAME,
-                token = token
+                token = gitHubToken
             )
             isCheckingUpdate = false
             result.onSuccess { release ->
@@ -229,8 +221,8 @@ fun ZulipHomeScreen(
         }
     }
 
-    LaunchedEffect(autoUpdateEnabled, gitHubToken) {
-        if (!checkedUpdateThisSession && autoUpdateEnabled && gitHubToken.trim().isNotBlank()) {
+    LaunchedEffect(autoUpdateEnabled) {
+        if (!checkedUpdateThisSession && autoUpdateEnabled) {
             checkedUpdateThisSession = true
             checkForUpdates(manual = false)
         }
@@ -637,11 +629,6 @@ fun ZulipHomeScreen(
                                 autoUpdateEnabled = enabled
                                 onSaveAutoUpdateEnabled(enabled)
                             },
-                            gitHubToken = gitHubToken,
-                            onGitHubTokenChanged = { token ->
-                                gitHubToken = token
-                                onSaveGitHubToken(token)
-                            },
                             onCheckUpdatesNow = { checkForUpdates(manual = true) },
                             isCheckingUpdate = isCheckingUpdate,
                             updateStatusText = updateStatusText
@@ -787,8 +774,6 @@ private fun SettingsPanel(
     onBiometricLockChanged: (Boolean) -> Unit = {},
     autoUpdateEnabled: Boolean = true,
     onAutoUpdateChanged: (Boolean) -> Unit = {},
-    gitHubToken: String = "",
-    onGitHubTokenChanged: (String) -> Unit = {},
     onCheckUpdatesNow: () -> Unit = {},
     isCheckingUpdate: Boolean = false,
     updateStatusText: String? = null
@@ -815,6 +800,8 @@ private fun SettingsPanel(
         Surface(shape = RoundedCornerShape(20.dp), color = Color(0xFF16273D)) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(text = "Preferencje", color = Color(0xFFF2F6FF), fontWeight = FontWeight.SemiBold)
+
+                Text(text = "Wygląd", color = Color(0xFFF2F6FF), fontWeight = FontWeight.Medium)
                 SettingsToggleRow(label = "Skalowanie interfejsu (tryb kompaktowy)", checked = compactMode, onCheckedChange = onCompactModeChanged)
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     val label = when {
@@ -836,16 +823,12 @@ private fun SettingsPanel(
                 }
                 Spacer(modifier = Modifier.height(2.dp))
                 SettingsToggleRow(label = "Markdown w kanałach", checked = markdownEnabled, onCheckedChange = onMarkdownEnabledChanged)
+
+                Text(text = "Bezpieczeństwo", color = Color(0xFFF2F6FF), fontWeight = FontWeight.Medium)
                 SettingsToggleRow(label = "Blokada biometryczna / PIN", checked = biometricLockEnabled, onCheckedChange = onBiometricLockChanged)
+
+                Text(text = "Aktualizacje", color = Color(0xFFF2F6FF), fontWeight = FontWeight.Medium)
                 SettingsToggleRow(label = "Automatyczne aktualizacje (GitHub)", checked = autoUpdateEnabled, onCheckedChange = onAutoUpdateChanged)
-                OutlinedTextField(
-                    value = gitHubToken,
-                    onValueChange = onGitHubTokenChanged,
-                    label = { Text("Token GitHub (repo prywatne)") },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    modifier = Modifier.fillMaxWidth()
-                )
                 OutlinedButton(
                     onClick = onCheckUpdatesNow,
                     enabled = !isCheckingUpdate,
@@ -867,6 +850,8 @@ private fun SettingsPanel(
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
+
+                Text(text = "Powiadomienia", color = Color(0xFFF2F6FF), fontWeight = FontWeight.Medium)
                 SettingsToggleRow(label = "Powiadomienia lokalne (global)", checked = notificationsEnabled, onCheckedChange = onNotificationsEnabledChanged)
                 SettingsToggleRow(label = "Powiadomienia DM", checked = dmNotificationsEnabled, onCheckedChange = onDmNotificationsEnabledChanged)
                 SettingsToggleRow(label = "Powiadomienia kanałów", checked = channelNotificationsEnabled, onCheckedChange = onChannelNotificationsEnabledChanged)

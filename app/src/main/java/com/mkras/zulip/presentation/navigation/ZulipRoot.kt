@@ -157,9 +157,7 @@ fun ZulipRoot(
             initialBiometricLockEnabled = viewModel.getBiometricLockEnabled(),
             onSaveBiometricLockEnabled = viewModel::saveBiometricLockEnabled,
             initialAutoUpdateEnabled = viewModel.getAutoUpdateEnabled(),
-            onSaveAutoUpdateEnabled = viewModel::saveAutoUpdateEnabled,
-            initialGitHubToken = viewModel.getGitHubToken(),
-            onSaveGitHubToken = viewModel::saveGitHubToken
+            onSaveAutoUpdateEnabled = viewModel::saveAutoUpdateEnabled
         )
         }
     }
