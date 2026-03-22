@@ -172,6 +172,7 @@ fun ZulipHomeScreen(
     var latestAvailableRelease by remember { mutableStateOf<GitHubReleaseInfo?>(null) }
     var checkedUpdateThisSession by rememberSaveable { mutableStateOf(false) }
     var pendingNotificationReadMessageId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var pendingNotificationTarget by remember { mutableStateOf<NotificationNavigationTarget?>(null) }
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
@@ -299,10 +300,41 @@ fun ZulipHomeScreen(
 
     LaunchedEffect(notificationTarget?.messageId) {
         val target = notificationTarget ?: return@LaunchedEffect
+        pendingNotificationTarget = target
+
+        if (target.messageType == "private") {
+            selectedTab = 0
+        } else if (target.messageType == "stream") {
+            selectedTab = 1
+        }
+
+        if (target.messageId > 0L) {
+            pendingNotificationReadMessageId = target.messageId
+        }
+
+        onNotificationTargetConsumed()
+    }
+
+    LaunchedEffect(
+        pendingNotificationTarget?.messageId,
+        chatUiState.privateMessages.size,
+        chatUiState.allMessages.size,
+        channelsUiState.messages.size
+    ) {
+        val target = pendingNotificationTarget ?: return@LaunchedEffect
+        val messageId = target.messageId
+        val isLoaded = messageId <= 0L ||
+            chatUiState.privateMessages.any { it.id == messageId } ||
+            chatUiState.allMessages.any { it.id == messageId } ||
+            channelsUiState.messages.any { it.id == messageId }
+
+        if (!isLoaded) {
+            return@LaunchedEffect
+        }
+
         if (target.messageType == "private") {
             val key = target.conversationKey.orEmpty()
             if (key.isNotBlank()) {
-                selectedTab = 0
                 chatViewModel.openConversationFromNotification(
                     conversationKey = key,
                     conversationTitle = target.conversationTitle,
@@ -312,7 +344,6 @@ fun ZulipHomeScreen(
         } else if (target.messageType == "stream") {
             val stream = target.streamName.orEmpty()
             if (stream.isNotBlank()) {
-                selectedTab = 1
                 channelsViewModel.openFromAllMessages(
                     streamName = stream,
                     topicName = target.topic.orEmpty(),
@@ -321,12 +352,7 @@ fun ZulipHomeScreen(
             }
         }
 
-        if (target.messageId > 0L) {
-            pendingNotificationReadMessageId = target.messageId
-            chatViewModel.onMessagesRendered(listOf(target.messageId))
-        }
-
-        onNotificationTargetConsumed()
+        pendingNotificationTarget = null
     }
 
     LaunchedEffect(

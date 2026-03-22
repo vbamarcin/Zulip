@@ -1,6 +1,7 @@
 package com.mkras.zulip.data.repository
 
 import android.util.Log
+import com.mkras.zulip.core.chat.DmConversationKey
 import com.mkras.zulip.core.network.BasicCredentials
 import com.mkras.zulip.core.network.ZulipApiFactory
 import com.mkras.zulip.core.security.SecureSessionStorage
@@ -14,6 +15,7 @@ import com.mkras.zulip.domain.repository.DirectMessageCandidate
 import com.mkras.zulip.domain.repository.UploadedFile
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -110,7 +112,7 @@ class ChatRepositoryImpl @Inject constructor(
                 reactionSummary = null,
                 avatarUrl = resolveAvatarUrl(dto.avatarUrl.orEmpty(), serverUrl),
                 messageType = msgType,
-                conversationKey = if (msgType == "private") buildConversationKey(recipients, dto.senderEmail.orEmpty(), selfEmail) else "",
+                conversationKey = if (msgType == "private") DmConversationKey.fromRecipientMaps(recipients, dto.senderEmail.orEmpty(), selfEmail) else "",
                 dmDisplayName = if (msgType == "private") buildDmDisplayName(recipients, selfEmail, dto.senderFullName.orEmpty()) else ""
             )
         }.filterNotNull()
@@ -157,7 +159,7 @@ class ChatRepositoryImpl @Inject constructor(
                 reactionSummary = null,
                 avatarUrl = resolveAvatarUrl(dto.avatarUrl.orEmpty(), serverUrl),
                 messageType = msgType,
-                conversationKey = if (msgType == "private") buildConversationKey(recipients, dto.senderEmail.orEmpty(), selfEmail) else "",
+                conversationKey = if (msgType == "private") DmConversationKey.fromRecipientMaps(recipients, dto.senderEmail.orEmpty(), selfEmail) else "",
                 dmDisplayName = if (msgType == "private") buildDmDisplayName(recipients, selfEmail, dto.senderFullName.orEmpty()) else ""
             )
         }
@@ -331,42 +333,6 @@ class ChatRepositoryImpl @Inject constructor(
             .orEmpty()
     }
 
-    private fun buildConversationKey(recipients: List<Map<*, *>>, fallbackEmail: String, selfEmail: String): String {
-        val recipientEmails = recipients
-            .mapNotNull { it["email"] as? String }
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-
-        val participants = if (recipientEmails.isEmpty()) {
-            listOf(fallbackEmail)
-        } else {
-            recipientEmails
-        }
-
-        val withoutSelf = participants.filterNot { it.equals(selfEmail, ignoreCase = true) }
-        val normalized = (if (withoutSelf.isNotEmpty()) withoutSelf else participants)
-            .map { it.lowercase() }
-            .distinct()
-            .sorted()
-
-        return normalized.joinToString(",")
-    }
-
-    private fun normalizePrivateConversationKey(rawTo: String, selfEmail: String): String {
-        val participants = rawTo
-            .split(',')
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-
-        val withoutSelf = participants.filterNot { it.equals(selfEmail, ignoreCase = true) }
-        val normalized = (if (withoutSelf.isNotEmpty()) withoutSelf else participants)
-            .map { it.lowercase() }
-            .distinct()
-            .sorted()
-
-        return normalized.joinToString(",").ifBlank { rawTo.trim().lowercase() }
-    }
-
     private fun buildDmDisplayName(recipients: List<Map<*, *>>, selfEmail: String, fallback: String): String {
         val names = recipients
             .filter { (it["email"] as? String)?.equals(selfEmail, ignoreCase = true) == false }
@@ -392,17 +358,26 @@ class ChatRepositoryImpl @Inject constructor(
             credentials = BasicCredentials(auth.email, auth.apiKey)
         )
 
-        try {
-            service.updateMessageFlags(
-                messagesJson = ids.joinToString(prefix = "[", postfix = "]"),
-                operation = "add",
-                flag = "read"
-            )
-        } catch (e: Exception) {
-            // Network error: revert local DB update to prevent stale state
-            messageDao.updateReadFlags(ids = ids, isRead = false)
-            throw e
+        var lastError: Exception? = null
+        repeat(3) { attempt ->
+            try {
+                service.updateMessageFlags(
+                    messagesJson = ids.joinToString(prefix = "[", postfix = "]"),
+                    operation = "add",
+                    flag = "read"
+                )
+                return
+            } catch (e: Exception) {
+                lastError = e
+                if (attempt < 2) {
+                    delay((400L shl attempt).coerceAtMost(2_000L))
+                }
+            }
         }
+
+        // All retries failed: revert local DB update to prevent stale state.
+        messageDao.updateReadFlags(ids = ids, isRead = false)
+        throw (lastError ?: Exception("Failed to mark messages as read"))
     }
 
     override suspend fun uploadFile(fileName: String, mimeType: String?, bytes: ByteArray): Result<UploadedFile> {
@@ -468,7 +443,7 @@ class ChatRepositoryImpl @Inject constructor(
                         reactionSummary = null,
                         avatarUrl = "",
                         messageType = normalizedType,
-                        conversationKey = if (normalizedType == "private") normalizePrivateConversationKey(to, auth.email) else "",
+                        conversationKey = if (normalizedType == "private") DmConversationKey.fromRawTo(to, auth.email) else "",
                         dmDisplayName = if (normalizedType == "private") displayName.ifBlank { to } else ""
                     )
                 )

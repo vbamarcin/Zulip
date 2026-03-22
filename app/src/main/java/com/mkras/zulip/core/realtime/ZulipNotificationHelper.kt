@@ -15,6 +15,7 @@ import androidx.core.text.HtmlCompat
 import androidx.core.content.ContextCompat
 import com.mkras.zulip.MainActivity
 import com.mkras.zulip.R
+import com.mkras.zulip.core.chat.DmConversationKey
 import com.mkras.zulip.data.remote.dto.EventMessageDto
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -237,7 +238,7 @@ class ZulipNotificationHelper @Inject constructor(
         val messageType = message.type.orEmpty()
         val recipients = parsePrivateRecipients(message.displayRecipient)
         val conversationKey = if (messageType == "private") {
-            buildConversationKey(recipients, message.senderEmail.orEmpty(), selfEmail)
+            DmConversationKey.fromRecipientMaps(recipients, message.senderEmail.orEmpty(), selfEmail)
         } else {
             null
         }
@@ -265,27 +266,6 @@ class ZulipNotificationHelper @Inject constructor(
         return (displayRecipient as? List<*>)
             ?.mapNotNull { it as? Map<*, *> }
             .orEmpty()
-    }
-
-    private fun buildConversationKey(recipients: List<Map<*, *>>, fallbackEmail: String, selfEmail: String): String {
-        val recipientEmails = recipients
-            .mapNotNull { it["email"] as? String }
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-
-        val participants = if (recipientEmails.isEmpty()) {
-            listOf(fallbackEmail)
-        } else {
-            recipientEmails
-        }
-
-        val withoutSelf = participants.filterNot { it.equals(selfEmail, ignoreCase = true) }
-        val normalized = (if (withoutSelf.isNotEmpty()) withoutSelf else participants)
-            .map { it.lowercase() }
-            .distinct()
-            .sorted()
-
-        return normalized.joinToString(",")
     }
 
     private fun buildDmDisplayName(recipients: List<Map<*, *>>, selfEmail: String, fallback: String): String {

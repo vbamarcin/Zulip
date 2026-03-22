@@ -3,6 +3,7 @@ package com.mkras.zulip.presentation.chat
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.mkras.zulip.core.chat.DmConversationKey
 import com.mkras.zulip.core.realtime.EventProcessor
 import com.mkras.zulip.core.realtime.PresenceEvent
 import com.mkras.zulip.core.realtime.TypingEvent
@@ -275,7 +276,7 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             chatRepository.observePrivateMessages().collect { messages ->
                 val normalizedMessages = messages.map { message ->
-                    val normalizedKey = normalizeDmConversationKey(message.conversationKey, message.senderEmail)
+                    val normalizedKey = DmConversationKey.fromStoredKey(message.conversationKey, message.senderEmail, currentUserEmail)
                     if (normalizedKey == message.conversationKey) message else message.copy(conversationKey = normalizedKey)
                 }
 
@@ -311,22 +312,6 @@ class ChatViewModel @Inject constructor(
                 }
             }
         }
-    }
-
-    private fun normalizeDmConversationKey(rawKey: String, fallbackEmail: String): String {
-        val participants = rawKey
-            .split(',')
-            .map { it.trim().lowercase() }
-            .filter { it.isNotBlank() }
-            .ifEmpty {
-                listOf(fallbackEmail.trim().lowercase()).filter { it.isNotBlank() }
-            }
-
-        val withoutSelf = participants.filterNot { it == currentUserEmail.trim().lowercase() }
-        return (if (withoutSelf.isNotEmpty()) withoutSelf else participants)
-            .distinct()
-            .sorted()
-            .joinToString(",")
     }
 
     private fun observeMentionCandidates() {

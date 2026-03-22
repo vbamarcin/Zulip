@@ -1,6 +1,7 @@
 package com.mkras.zulip.core.realtime
 
 import android.util.Log
+import com.mkras.zulip.core.chat.DmConversationKey
 import com.mkras.zulip.core.security.SecureSessionStorage
 import com.mkras.zulip.data.local.db.MessageDao
 import com.mkras.zulip.data.local.db.StreamDao
@@ -88,27 +89,6 @@ class EventProcessor @Inject constructor(
             .orEmpty()
     }
 
-    private fun buildConversationKey(recipients: List<Map<*, *>>, fallbackEmail: String, selfEmail: String): String {
-        val recipientEmails = recipients
-            .mapNotNull { it["email"] as? String }
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-
-        val participants = if (recipientEmails.isEmpty()) {
-            listOf(fallbackEmail)
-        } else {
-            recipientEmails
-        }
-
-        val withoutSelf = participants.filterNot { it.equals(selfEmail, ignoreCase = true) }
-        val normalized = (if (withoutSelf.isNotEmpty()) withoutSelf else participants)
-            .map { it.lowercase() }
-            .distinct()
-            .sorted()
-
-        return normalized.joinToString(",")
-    }
-
     private fun buildDmDisplayName(recipients: List<Map<*, *>>, selfEmail: String, fallback: String): String {
         val names = recipients
             .filter { (it["email"] as? String)?.equals(selfEmail, ignoreCase = true) == false }
@@ -140,7 +120,7 @@ class EventProcessor @Inject constructor(
 
         val isPrivate = message.type == "private"
         val recipients = if (isPrivate) parsePrivateRecipients(message.displayRecipient) else emptyList()
-        val conversationKey = if (isPrivate) buildConversationKey(recipients, message.senderEmail.orEmpty(), selfEmail) else ""
+        val conversationKey = if (isPrivate) DmConversationKey.fromRecipientMaps(recipients, message.senderEmail.orEmpty(), selfEmail) else ""
         val streamName = if (!isPrivate) message.displayRecipient?.toString().orEmpty().trim() else ""
         val isRead = message.flags?.contains("read") == true
 
