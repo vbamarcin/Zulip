@@ -84,6 +84,7 @@ fun ZulipRoot(
 
     val session = uiState.currentSession
     var biometricAuthenticated by remember { mutableStateOf(false) }
+    var isHandlingAttachment by remember { mutableStateOf(false) }
     val lifecycleOwner = LocalLifecycleOwner.current
 
     DisposableEffect(lifecycleOwner, session) {
@@ -123,7 +124,7 @@ fun ZulipRoot(
         )
     } else {
         val biometricEnabled = viewModel.getBiometricLockEnabled()
-        if (biometricEnabled && !biometricAuthenticated) {
+        if (biometricEnabled && !biometricAuthenticated && !isHandlingAttachment) {
             BiometricLockScreen(
                 onAuthenticated = { biometricAuthenticated = true },
                 onLogout = viewModel::logout
@@ -132,6 +133,8 @@ fun ZulipRoot(
         ZulipHomeScreen(
             session = session,
             onLogout = viewModel::logout,
+            onAttachmentOperationStart = { isHandlingAttachment = true },
+            onAttachmentOperationEnd = { isHandlingAttachment = false },
             initialCompactMode = viewModel.getCompactMode(),
             onSaveCompactMode = viewModel::saveCompactMode,
             initialFontScale = viewModel.getFontScale(),

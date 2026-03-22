@@ -149,7 +149,9 @@ fun ChatScreen(
     pendingDirectMessageContent: String? = null,
     onPendingDirectMessageContentConsumed: () -> Unit = {},
     canModerateAllMessages: Boolean = false,
-    typingText: String? = null
+    typingText: String? = null,
+    onAttachmentOperationStart: () -> Unit = {},
+    onAttachmentOperationEnd: () -> Unit = {}
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -222,7 +224,9 @@ fun ChatScreen(
             onDeleteMessage = onDeleteMessage,
             pendingDirectMessageContent = pendingDirectMessageContent,
             onPendingDirectMessageContentConsumed = onPendingDirectMessageContentConsumed,
-            canModerateAllMessages = canModerateAllMessages
+            canModerateAllMessages = canModerateAllMessages,
+            onAttachmentOperationStart = onAttachmentOperationStart,
+            onAttachmentOperationEnd = onAttachmentOperationEnd
         )
     }
 }
@@ -632,7 +636,9 @@ private fun DmThreadView(
     onDeleteMessage: (Long) -> Unit = { _ -> },
     pendingDirectMessageContent: String? = null,
     onPendingDirectMessageContentConsumed: () -> Unit = {},
-    canModerateAllMessages: Boolean = false
+    canModerateAllMessages: Boolean = false,
+    onAttachmentOperationStart: () -> Unit = {},
+    onAttachmentOperationEnd: () -> Unit = {}
 ) {
     val rowBottom = if (compactMode) 10.dp else 14.dp
     val gap = if (compactMode) 4.dp else 6.dp
@@ -666,6 +672,7 @@ private fun DmThreadView(
     val attachmentLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
+        onAttachmentOperationEnd()
         if (uri == null) return@rememberLauncherForActivityResult
         coroutineScope.launch {
             isUploadingAttachment = true
@@ -839,7 +846,10 @@ private fun DmThreadView(
                     pendingMentionText = null
                 }
             },
-            onAddAttachment = { attachmentLauncher.launch(arrayOf("*/*")) },
+            onAddAttachment = {
+                onAttachmentOperationStart()
+                attachmentLauncher.launch(arrayOf("*/*"))
+            },
             onGenerateVideoCall = {
                 val timestamp = System.currentTimeMillis()
                 val meetingId = "call_${timestamp}"

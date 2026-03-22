@@ -149,6 +149,8 @@ fun ZulipHomeScreen(
     onSaveBiometricLockEnabled: (Boolean) -> Unit = {},
     initialAutoUpdateEnabled: Boolean = true,
     onSaveAutoUpdateEnabled: (Boolean) -> Unit = {},
+    onAttachmentOperationStart: () -> Unit = {},
+    onAttachmentOperationEnd: () -> Unit = {},
     chatViewModel: ChatViewModel = hiltViewModel(),
     channelsViewModel: ChannelsViewModel = hiltViewModel()
 ) {
@@ -487,7 +489,9 @@ fun ZulipHomeScreen(
                             pendingDirectMessageContent = chatUiState.pendingDirectMessageContent,
                             onPendingDirectMessageContentConsumed = chatViewModel::consumePendingDirectMessageContent,
                             canModerateAllMessages = chatUiState.canModerateAllMessages,
-                            typingText = chatUiState.typingText
+                            typingText = chatUiState.typingText,
+                            onAttachmentOperationStart = onAttachmentOperationStart,
+                            onAttachmentOperationEnd = onAttachmentOperationEnd
                         )
                         1 -> ChannelsScreen(
                             uiState = channelsUiState,
