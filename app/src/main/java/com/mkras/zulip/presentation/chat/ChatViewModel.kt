@@ -283,7 +283,9 @@ class ChatViewModel @Inject constructor(
                             senderEmail = latest?.senderEmail ?: "",
                             displayName = latest?.dmDisplayName?.ifBlank { latest.senderFullName } ?: key,
                             avatarUrl = avatarUrl,
-                            unreadCount = msgs.count { !it.isRead },
+                            unreadCount = msgs.count {
+                                !it.isRead && !it.senderEmail.equals(currentUserEmail, ignoreCase = true)
+                            },
                             latestTimestamp = latest?.timestampSeconds ?: 0L
                         )
                     }

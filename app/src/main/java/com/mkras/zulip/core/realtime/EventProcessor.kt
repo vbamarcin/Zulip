@@ -116,7 +116,9 @@ class EventProcessor @Inject constructor(
             return
         }
 
-        if (message.senderEmail.equals(selfEmail, ignoreCase = true)) {
+        val senderEmail = message.senderEmail.orEmpty()
+        val isOwnMessage = senderEmail.equals(selfEmail, ignoreCase = true)
+        if (isOwnMessage) {
             return
         }
 
@@ -124,15 +126,16 @@ class EventProcessor @Inject constructor(
         val recipients = if (isPrivate) parsePrivateRecipients(message.displayRecipient) else emptyList()
         val conversationKey = if (isPrivate) buildConversationKey(recipients, message.senderEmail.orEmpty()) else ""
         val streamName = if (!isPrivate) message.displayRecipient?.toString().orEmpty().trim() else ""
+        val isRead = message.flags?.contains("read") == true
 
         val isMutedDirectMessage = isPrivate && secureSessionStorage.isDirectMessageMuted(conversationKey)
         val isMutedStream = !isPrivate && secureSessionStorage.isChannelMuted(streamName)
         val isMentioned = message.flags?.contains("mentioned") == true ||
             message.flags?.contains("wildcard_mentioned") == true
         val shouldNotify = if (isPrivate) {
-            dmNotificationsEnabled && !isMutedDirectMessage
+            !isRead && dmNotificationsEnabled && !isMutedDirectMessage
         } else {
-            !isMutedStream && channelNotificationsEnabled && (message.type == "stream" || isMentioned)
+            !isRead && !isMutedStream && channelNotificationsEnabled && (message.type == "stream" || isMentioned)
         }
 
         val msgType = message.type.orEmpty()
@@ -140,12 +143,12 @@ class EventProcessor @Inject constructor(
             MessageEntity(
                 id = message.id,
                 senderFullName = message.senderFullName.orEmpty().ifBlank { message.senderEmail.orEmpty() },
-                senderEmail = message.senderEmail.orEmpty(),
+                senderEmail = senderEmail,
                 content = message.content.orEmpty(),
                 topic = message.subject.orEmpty(),
                 streamName = if (msgType == "stream") message.displayRecipient?.toString() else null,
                 timestampSeconds = message.timestamp ?: System.currentTimeMillis() / 1000,
-                isRead = message.flags?.contains("read") == true,
+                isRead = isRead,
                 isStarred = message.flags?.contains("starred") == true,
                 isMentioned = message.flags?.contains("mentioned") == true,
                 isWildcardMentioned = message.flags?.contains("wildcard_mentioned") == true,

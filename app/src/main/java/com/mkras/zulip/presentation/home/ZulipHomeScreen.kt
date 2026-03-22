@@ -256,7 +256,9 @@ fun ZulipHomeScreen(
         }
     }
 
-    val unreadDm = chatUiState.privateMessages.count { !it.isRead }
+    val unreadDm = chatUiState.privateMessages.count {
+        !it.isRead && !it.senderEmail.equals(session.email, ignoreCase = true)
+    }
     val unreadStreamMessages = chatUiState.allMessages
         .asSequence()
         .filter {
