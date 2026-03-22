@@ -96,7 +96,7 @@ private val HOME_TABS = listOf(
     RootTab("Kanały", Icons.Rounded.Forum),
     RootTab("Wszystkie", Icons.Rounded.AllInbox),
     RootTab("Szukaj", Icons.AutoMirrored.Rounded.ManageSearch),
-    RootTab("Użytkownicy", Icons.Rounded.People),
+    RootTab("Users", Icons.Rounded.People),
     RootTab("Ustawienia", Icons.Rounded.Settings)
 )
 private val TabBarBg      = Color(0xCC0B1728)
@@ -597,6 +597,7 @@ fun ZulipHomeScreen(
                                 chatViewModel.startDirectMessage(person)
                                 selectedTab = 0
                             },
+                            serverUrl = session.serverUrl,
                             compactMode = compactMode
                         )
                         else -> SettingsPanel(

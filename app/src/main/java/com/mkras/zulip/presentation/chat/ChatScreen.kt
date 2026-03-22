@@ -1110,6 +1110,7 @@ fun UsersScreen(
     error: String?,
     onEnsureLoaded: () -> Unit,
     onSelectUser: (DirectMessageCandidate) -> Unit,
+    serverUrl: String = "",
     compactMode: Boolean
 ) {
     var query by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
@@ -1182,13 +1183,6 @@ fun UsersScreen(
                     contentPadding = PaddingValues(bottom = 20.dp)
                 ) {
                     items(filteredPeople, key = { it.userId }) { person ->
-                        val peerEmail = remember(person.email) { person.email.trim().lowercase() }
-                        val presenceStatus = presenceByEmail[peerEmail]
-                        val dotColor = when (presenceStatus) {
-                            "active" -> Color(0xFF43D87A)
-                            "idle" -> Color(0xFFF5C543)
-                            else -> Color(0xFF6B7280)
-                        }
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1204,30 +1198,12 @@ fun UsersScreen(
                                 ),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Box(contentAlignment = Alignment.BottomEnd) {
-                                    Surface(
-                                        modifier = Modifier.size(if (compactMode) 28.dp else 34.dp),
-                                        shape = CircleShape,
-                                        color = Color(0xFF2D4B6E)
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Text(
-                                                text = person.fullName.firstOrNull()
-                                                    ?.uppercaseChar()?.toString() ?: "?",
-                                                color = Color(0xFFBDD5F2),
-                                                fontWeight = FontWeight.Bold,
-                                                style = if (compactMode) MaterialTheme.typography.labelMedium
-                                                    else MaterialTheme.typography.labelLarge
-                                            )
-                                        }
-                                    }
-                                    Box(
-                                        modifier = Modifier
-                                            .size(10.dp)
-                                            .background(dotColor, CircleShape)
-                                            .border(1.5.dp, CardBg, CircleShape)
-                                    )
-                                }
+                                val avatarSize = if (compactMode) 28.dp else 36.dp
+                                AvatarImage(
+                                    avatarUrl = person.avatarUrl,
+                                    initials = person.fullName.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                                    size = avatarSize
+                                )
                                 Column(
                                     modifier = Modifier
                                         .weight(1f)
@@ -1243,16 +1219,6 @@ fun UsersScreen(
                                             else MaterialTheme.typography.bodyLarge
                                     )
                                 }
-                                val statusLabel = when (presenceStatus) {
-                                    "active" -> "aktywny"
-                                    "idle" -> "nieaktywny"
-                                    else -> "offline"
-                                }
-                                Text(
-                                    text = statusLabel,
-                                    color = dotColor,
-                                    style = MaterialTheme.typography.labelSmall
-                                )
                             }
                         }
                     }

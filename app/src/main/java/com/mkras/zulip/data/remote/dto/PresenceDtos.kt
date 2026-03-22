@@ -14,6 +14,6 @@ data class UserPresenceDto(
 )
 
 data class PresenceDetailDto(
-    @Json(name = "status") val status: String,
-    @Json(name = "timestamp") val timestamp: Long
+    @Json(name = "status") val status: String? = null,
+    @Json(name = "timestamp") val timestamp: Long? = null
 )

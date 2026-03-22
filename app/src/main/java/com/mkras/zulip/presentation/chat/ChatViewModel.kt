@@ -1,5 +1,6 @@
 package com.mkras.zulip.presentation.chat
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mkras.zulip.core.realtime.EventProcessor
@@ -9,12 +10,10 @@ import com.mkras.zulip.core.security.SecureSessionStorage
 import com.mkras.zulip.data.local.entity.MessageEntity
 import com.mkras.zulip.domain.repository.ChatRepository
 import com.mkras.zulip.domain.repository.DirectMessageCandidate
-import com.mkras.zulip.presentation.chat.PickedAttachment
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,12 +30,14 @@ class ChatViewModel @Inject constructor(
 
     private companion object {
         const val MENTION_CANDIDATES_CACHE_TTL_MS = 6 * 60 * 60 * 1000L
+        const val TAG = "PresenceDebug"
     }
 
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
     private val serverUrl: String = secureSessionStorage.getAuth()?.serverUrl.orEmpty()
+    private val currentUserEmail: String = secureSessionStorage.getAuth()?.email.orEmpty()
     private var typingTimeoutJob: Job? = null
     private var searchJob: Job? = null
 
@@ -49,7 +50,21 @@ class ChatViewModel @Inject constructor(
         observePresenceEvents()
         ensureMentionCandidatesLoaded()
         loadModerationPermission()
+        initialPresenceSync()
         resyncOnResume()
+    }
+
+    private fun initialPresenceSync() {
+        viewModelScope.launch {
+            chatRepository.getPresence()
+                .onSuccess { presences ->
+                    Log.d(TAG, "initialPresenceSync success: mapped_count=${presences.size}")
+                    _uiState.update { it.copy(presenceByEmail = presences) }
+                }
+                .onFailure { error ->
+                    Log.e(TAG, "initialPresenceSync failed", error)
+                }
+        }
     }
 
     private fun loadModerationPermission() {
@@ -71,9 +86,7 @@ class ChatViewModel @Inject constructor(
 
     fun onMessagesRendered(ids: List<Long>) {
         val targetIds = ids.distinct()
-        if (targetIds.isEmpty()) {
-            return
-        }
+        if (targetIds.isEmpty()) return
 
         viewModelScope.launch {
             chatRepository.markMessagesAsRead(targetIds)
@@ -82,6 +95,7 @@ class ChatViewModel @Inject constructor(
 
     fun resyncOnResume() {
         loadModerationPermission()
+        initialPresenceSync()
         viewModelScope.launch {
             chatRepository.resyncLatestMessages()
             chatRepository.resyncStarredMessages()
@@ -160,27 +174,14 @@ class ChatViewModel @Inject constructor(
         _uiState.update { it.copy(pendingDirectMessageContent = null) }
     }
 
-    fun retryLoadDirectMessageCandidates() {
-        loadDirectMessageCandidates(forceRefresh = true)
-    }
-
     fun ensureMentionCandidatesLoaded(forceRefresh: Boolean = false) {
-        if (uiState.value.isNewDmLoading) {
-            return
-        }
+        if (uiState.value.isNewDmLoading) return
 
         val hasCache = uiState.value.newDmPeople.isNotEmpty()
         val cacheAge = System.currentTimeMillis() - secureSessionStorage.getMentionCandidatesLastSyncTime()
         val isCacheFresh = cacheAge in 1 until MENTION_CANDIDATES_CACHE_TTL_MS
 
-        if (!forceRefresh && hasCache && isCacheFresh) {
-            return
-        }
-
-        if (!forceRefresh && hasCache && !isCacheFresh) {
-            loadDirectMessageCandidates(forceRefresh = false)
-            return
-        }
+        if (!forceRefresh && hasCache && isCacheFresh) return
 
         loadDirectMessageCandidates(forceRefresh = forceRefresh)
     }
@@ -241,9 +242,7 @@ class ChatViewModel @Inject constructor(
                             isNewDmLoading = false,
                             newDmError = if (forceRefresh || it.newDmPeople.isEmpty()) {
                                 error.message ?: "Failed to load users"
-                            } else {
-                                null
-                            }
+                            } else null
                         )
                     }
                 }
@@ -257,11 +256,20 @@ class ChatViewModel @Inject constructor(
                     .groupBy { it.conversationKey }
                     .map { (key, msgs) ->
                         val latest = msgs.maxByOrNull { it.timestampSeconds }
+                        
+                        // FIX: Look for a message from someone else to get their avatar
+                        val peerMessage = msgs.find { !it.senderEmail.equals(currentUserEmail, ignoreCase = true) }
+                        val avatarUrl = if (peerMessage != null) {
+                            resolveAvatarUrl(peerMessage.avatarUrl.orEmpty())
+                        } else {
+                            resolveAvatarUrl(latest?.avatarUrl.orEmpty())
+                        }
+
                         DmConversation(
                             conversationKey = key,
                             senderEmail = latest?.senderEmail ?: "",
                             displayName = latest?.dmDisplayName?.ifBlank { latest.senderFullName } ?: key,
-                            avatarUrl = resolveAvatarUrl(latest?.avatarUrl.orEmpty()),
+                            avatarUrl = avatarUrl,
                             unreadCount = msgs.count { !it.isRead },
                             latestTimestamp = latest?.timestampSeconds ?: 0L
                         )
@@ -278,11 +286,7 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             chatRepository.observeDirectMessageCandidates().collect { users ->
                 _uiState.update { state ->
-                    if (state.newDmPeople == users) {
-                        state
-                    } else {
-                        state.copy(newDmPeople = users)
-                    }
+                    if (state.newDmPeople == users) state else state.copy(newDmPeople = users)
                 }
             }
         }
@@ -292,9 +296,7 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             chatRepository.observeMessages().collect { messages ->
                 _uiState.update {
-                    it.copy(
-                        allMessages = messages.sortedByDescending { m -> m.timestampSeconds }
-                    )
+                    it.copy(allMessages = messages.sortedByDescending { m -> m.timestampSeconds })
                 }
             }
         }
@@ -320,16 +322,11 @@ class ChatViewModel @Inject constructor(
                         val normalizedStatus = when (event.status?.trim()?.lowercase()) {
                             "active", "online" -> "active"
                             "idle", "away" -> "idle"
-                            "offline" -> "offline"
-                            null, "" -> null
                             else -> "offline"
                         }
-
-                        if (normalizedStatus == null || normalizedStatus == "offline") {
-                            updated.remove(email)
-                        } else {
-                            updated[email] = normalizedStatus
-                        }
+                        if (normalizedStatus == "offline") updated.remove(email)
+                        else updated[email] = normalizedStatus
+                        Log.d(TAG, "presence update: email=$email, status=$normalizedStatus, total=${updated.size}")
                         state.copy(presenceByEmail = updated)
                     }
                 }
@@ -353,20 +350,14 @@ class ChatViewModel @Inject constructor(
             typingTimeoutJob = viewModelScope.launch {
                 delay(15_000)
                 _uiState.update { state ->
-                    if (state.typingText?.startsWith(sender) == true) {
-                        state.copy(typingText = null)
-                    } else {
-                        state
-                    }
+                    if (state.typingText?.startsWith(sender) == true) state.copy(typingText = null)
+                    else state
                 }
             }
         } else if (event.op == "stop") {
             _uiState.update { state ->
-                if (state.typingText?.startsWith(sender) == true) {
-                    state.copy(typingText = null)
-                } else {
-                    state
-                }
+                if (state.typingText?.startsWith(sender) == true) state.copy(typingText = null)
+                else state
             }
         }
     }
@@ -378,9 +369,7 @@ class ChatViewModel @Inject constructor(
                     resyncOnResume()
                     onSuccess(messageId)
                 }
-                .onFailure { error ->
-                    onError(error.message ?: "Failed to send message")
-                }
+                .onFailure { error -> onError(error.message ?: "Failed to send message") }
         }
     }
 
@@ -398,18 +387,14 @@ class ChatViewModel @Inject constructor(
                 mimeType = attachment.mimeType,
                 bytes = attachment.bytes
             ).onSuccess { uploadedFile ->
-                val content = "[${sanitizeAttachmentLabel(uploadedFile.filename)}](${uploadedFile.url})"
+                val content = "[${uploadedFile.filename.replace("[","(").replace("]",")")}](${uploadedFile.url})"
                 chatRepository.sendMessage(type, to, content, topic)
                     .onSuccess {
                         resyncOnResume()
                         onSuccess()
                     }
-                    .onFailure { error ->
-                        onError(error.message ?: "Failed to send attachment")
-                    }
-            }.onFailure { error ->
-                onError(error.message ?: "Failed to upload attachment")
-            }
+                    .onFailure { error -> onError(error.message ?: "Failed to send attachment") }
+            }.onFailure { error -> onError(error.message ?: "Failed to upload attachment") }
         }
     }
 
@@ -417,9 +402,7 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             chatRepository.addReaction(messageId, emojiName)
                 .onSuccess { onSuccess() }
-                .onFailure { error ->
-                    onError(error.message ?: "Failed to add reaction")
-                }
+                .onFailure { error -> onError(error.message ?: "Failed to add reaction") }
         }
     }
 
@@ -427,9 +410,7 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             chatRepository.removeReaction(messageId, emojiName)
                 .onSuccess { onSuccess() }
-                .onFailure { error ->
-                    onError(error.message ?: "Failed to remove reaction")
-                }
+                .onFailure { error -> onError(error.message ?: "Failed to remove reaction") }
         }
     }
 
@@ -447,9 +428,7 @@ class ChatViewModel @Inject constructor(
                     resyncOnResume()
                     onSuccess()
                 }
-                .onFailure { error ->
-                    onError(error.message ?: "Failed to edit message")
-                }
+                .onFailure { error -> onError(error.message ?: "Failed to edit message") }
         }
     }
 
@@ -460,9 +439,7 @@ class ChatViewModel @Inject constructor(
                     resyncOnResume()
                     onSuccess()
                 }
-                .onFailure { error ->
-                    onError(error.message ?: "Failed to delete message")
-                }
+                .onFailure { error -> onError(error.message ?: "Failed to delete message") }
         }
     }
 
@@ -470,43 +447,20 @@ class ChatViewModel @Inject constructor(
         performSearch(query = query, useDebounce = false, onSuccess = onSuccess, onError = onError)
     }
 
-    private fun sanitizeAttachmentLabel(fileName: String): String {
-        return fileName
-            .replace("[", "(")
-            .replace("]", ")")
-    }
-
     fun updateSearchQuery(query: String) {
         _uiState.update { it.copy(searchQuery = query, searchError = null) }
-
         val trimmed = query.trim()
         if (trimmed.isBlank()) {
             searchJob?.cancel()
-            _uiState.update {
-                it.copy(
-                    searchResults = emptyList(),
-                    searchError = null,
-                    isSearching = false
-                )
-            }
+            _uiState.update { it.copy(searchResults = emptyList(), searchError = null, isSearching = false) }
             return
         }
-
-        // Show fast local matches immediately while remote search is running.
         val localResults = localSearch(trimmed)
-        _uiState.update {
-            it.copy(
-                searchResults = localResults,
-                searchError = null,
-                isSearching = trimmed.length >= 2
-            )
-        }
-
+        _uiState.update { it.copy(searchResults = localResults, searchError = null, isSearching = trimmed.length >= 2) }
         if (trimmed.length < 2) {
             searchJob?.cancel()
             return
         }
-
         performSearch(query = trimmed, useDebounce = true)
     }
 
@@ -526,83 +480,33 @@ class ChatViewModel @Inject constructor(
         onError: (String) -> Unit = {}
     ) {
         val trimmed = query.trim()
-        if (trimmed.isBlank()) {
-            _uiState.update { it.copy(searchResults = emptyList(), searchError = null, isSearching = false) }
-            return
-        }
-
+        if (trimmed.isBlank()) return
         val localResults = localSearch(trimmed)
-        _uiState.update {
-            it.copy(
-                searchQuery = trimmed,
-                searchResults = localResults,
-                searchError = null,
-                isSearching = true
-            )
-        }
-
+        _uiState.update { it.copy(searchQuery = trimmed, searchResults = localResults, searchError = null, isSearching = true) }
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
-            if (useDebounce) {
-                delay(350)
-            }
-
-            if (uiState.value.searchQuery.trim() != trimmed) {
-                return@launch
-            }
-
+            if (useDebounce) delay(350)
+            if (uiState.value.searchQuery.trim() != trimmed) return@launch
             chatRepository.searchMessages(trimmed)
                 .onSuccess { remoteResults ->
-                    if (uiState.value.searchQuery.trim() != trimmed) {
-                        return@onSuccess
-                    }
-
-                    val merged = (remoteResults + localResults)
-                        .distinctBy { it.id }
-                        .sortedByDescending { it.timestampSeconds }
-
-                    _uiState.update {
-                        it.copy(
-                            isSearching = false,
-                            searchResults = merged,
-                            searchError = null,
-                            searchQuery = trimmed
-                        )
-                    }
+                    if (uiState.value.searchQuery.trim() != trimmed) return@onSuccess
+                    val merged = (remoteResults + localResults).distinctBy { it.id }.sortedByDescending { it.timestampSeconds }
+                    _uiState.update { it.copy(isSearching = false, searchResults = merged, searchError = null, searchQuery = trimmed) }
                     onSuccess(merged)
                 }
                 .onFailure { error ->
-                    if (uiState.value.searchQuery.trim() != trimmed) {
-                        return@onFailure
-                    }
-
-                    _uiState.update {
-                        it.copy(
-                            isSearching = false,
-                            searchError = error.message ?: "Failed to search messages",
-                            searchResults = localResults,
-                            searchQuery = trimmed
-                        )
-                    }
-                    onError(error.message ?: "Failed to search messages")
+                    if (uiState.value.searchQuery.trim() != trimmed) return@onFailure
+                    _uiState.update { it.copy(isSearching = false, searchError = error.message ?: "Failed to search", searchResults = localResults, searchQuery = trimmed) }
+                    onError(error.message ?: "Failed to search")
                 }
         }
     }
 
     private fun localSearch(query: String): List<MessageEntity> {
         val q = query.lowercase()
-        return uiState.value.allMessages
-            .asSequence()
-            .filter { message ->
-                message.senderFullName.lowercase().contains(q) ||
-                    message.content.lowercase().contains(q) ||
-                    message.topic.lowercase().contains(q) ||
-                    (message.streamName?.lowercase()?.contains(q) == true) ||
-                    message.dmDisplayName.lowercase().contains(q)
-            }
-            .sortedByDescending { it.timestampSeconds }
-            .take(80)
-            .toList()
+        return uiState.value.allMessages.asSequence().filter { message ->
+            message.senderFullName.lowercase().contains(q) || message.content.lowercase().contains(q) || message.topic.lowercase().contains(q) || (message.streamName?.lowercase()?.contains(q) == true) || message.dmDisplayName.lowercase().contains(q)
+        }.sortedByDescending { it.timestampSeconds }.take(80).toList()
     }
 }
 

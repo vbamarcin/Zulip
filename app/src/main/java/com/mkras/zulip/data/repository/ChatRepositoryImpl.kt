@@ -1,5 +1,6 @@
 package com.mkras.zulip.data.repository
 
+import android.util.Log
 import com.mkras.zulip.core.network.BasicCredentials
 import com.mkras.zulip.core.network.ZulipApiFactory
 import com.mkras.zulip.core.security.SecureSessionStorage
@@ -28,6 +29,10 @@ class ChatRepositoryImpl @Inject constructor(
     private val streamDao: StreamDao,
     private val directMessageCandidateDao: DirectMessageCandidateDao
 ) : ChatRepository {
+
+    private companion object {
+        const val TAG = "PresenceDebug"
+    }
 
     private fun escapeJsonOperand(value: String): String {
         return value
@@ -620,7 +625,7 @@ class ChatRepositoryImpl @Inject constructor(
 
             val users = response.members
                 .asSequence()
-                .filter { it.isActive && !it.isBot }
+                .filter { it.isActive }
                 .filter { !it.email.equals(auth.email, ignoreCase = true) }
                 .map {
                     DirectMessageCandidate(
@@ -648,6 +653,49 @@ class ChatRepositoryImpl @Inject constructor(
 
             Result.success(users)
         } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun getPresence(): Result<Map<String, String>> {
+        return try {
+            val auth = secureSessionStorage.getAuth() ?: return Result.failure(Exception("Not authenticated"))
+            val service = zulipApiFactory.create(
+                serverUrl = auth.serverUrl,
+                credentials = BasicCredentials(auth.email, auth.apiKey)
+            )
+
+            val response = service.getAllPresences()
+            if (response.result == "success") {
+                val presences = response.presences
+                    ?.mapNotNull { entry ->
+                        val normalizedEmail = entry.key.trim().lowercase()
+                        if (normalizedEmail.isBlank()) return@mapNotNull null
+
+                        val rawStatus = entry.value.aggregated?.status
+                            ?: entry.value.website?.status
+                        val normalizedStatus = when (rawStatus?.trim()?.lowercase()) {
+                            "active", "online" -> "active"
+                            "idle", "away" -> "idle"
+                            else -> null
+                        }
+
+                        if (normalizedStatus != null) normalizedEmail to normalizedStatus else null
+                    }
+                    ?.toMap()
+                    ?: emptyMap()
+
+                Log.d(
+                    TAG,
+                    "getPresence success: raw_count=${response.presences?.size ?: 0}, mapped_count=${presences.size}"
+                )
+                Result.success(presences)
+            } else {
+                Log.w(TAG, "getPresence error result: ${response.message}")
+                Result.failure(Exception(response.message))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "getPresence exception", e)
             Result.failure(e)
         }
     }

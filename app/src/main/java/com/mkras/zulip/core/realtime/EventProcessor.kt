@@ -1,5 +1,6 @@
 package com.mkras.zulip.core.realtime
 
+import android.util.Log
 import com.mkras.zulip.core.security.SecureSessionStorage
 import com.mkras.zulip.data.local.db.MessageDao
 import com.mkras.zulip.data.local.db.StreamDao
@@ -19,6 +20,10 @@ class EventProcessor @Inject constructor(
     private val streamDao: StreamDao,
     private val secureSessionStorage: SecureSessionStorage
 ) {
+
+    private companion object {
+        const val TAG = "PresenceDebug"
+    }
 
     private val _typingEvents = MutableSharedFlow<TypingEvent>(extraBufferCapacity = 64)
     val typingEvents: SharedFlow<TypingEvent> = _typingEvents.asSharedFlow()
@@ -61,11 +66,16 @@ class EventProcessor @Inject constructor(
                         presence["aggregated"]?.status
                             ?: presence.values.firstNotNullOfOrNull { it.status }
                     }
+                val finalStatus = event.presenceStatus ?: statusFromPresenceObject
+                Log.d(
+                    TAG,
+                    "presence event: email=${event.email ?: event.senderEmail}, status=$finalStatus"
+                )
                 _presenceEvents.emit(
                     PresenceEvent(
                         userId = event.userId,
                         email = event.email ?: event.senderEmail,
-                        status = event.presenceStatus ?: statusFromPresenceObject
+                        status = finalStatus
                     )
                 )
             }
