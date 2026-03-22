@@ -79,6 +79,7 @@ import androidx.compose.ui.res.painterResource
 import com.mkras.zulip.core.security.StoredAuth
 import com.mkras.zulip.NotificationNavigationTarget
 import com.mkras.zulip.R
+import com.mkras.zulip.core.update.OneDriveUpdateChecker
 import com.mkras.zulip.presentation.auth.rememberSharedImageAuthHeader
 import com.mkras.zulip.presentation.chat.ChatScreen
 import com.mkras.zulip.presentation.chat.ChatViewModel
@@ -168,6 +169,8 @@ fun ZulipHomeScreen(
     var autoUpdateEnabled by rememberSaveable { mutableStateOf(initialAutoUpdateEnabled) }
     var isCheckingUpdate by rememberSaveable { mutableStateOf(false) }
     var updateStatusText by rememberSaveable { mutableStateOf<String?>(null) }
+    var startupUpdateMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var checkedUpdateThisSession by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val gitHubToken = BUILTIN_GITHUB_TOKEN
@@ -196,30 +199,42 @@ fun ZulipHomeScreen(
     val imageAuthHeader = rememberSharedImageAuthHeader()
 
     fun checkForUpdates(manual: Boolean = false) {
-        if (!manual) {
-            return
-        }
-
         coroutineScope.launch {
             isCheckingUpdate = true
-            updateStatusText = "Otwieranie OneDrive z aktualizacjami..."
-            runCatching {
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(ONEDRIVE_UPDATES_URL)).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(intent)
-            }.onSuccess {
-                updateStatusText = "Otwarto OneDrive. Pobierz najnowszy APK i zainstaluj."
-            }.onFailure { error ->
-                updateStatusText = error.message ?: "Nie udało się otworzyć linku aktualizacji"
+            if (manual) {
+                updateStatusText = "Sprawdzanie dostępności nowej wersji..."
             }
+
+            val checkResult = OneDriveUpdateChecker.findLatestVersion(ONEDRIVE_UPDATES_URL)
+            checkResult.onSuccess { latest ->
+                if (latest != null && OneDriveUpdateChecker.isNewerVersion(latest.version, BuildConfig.VERSION_NAME)) {
+                    startupUpdateMessage = "Dostępna nowa wersja ${latest.version} (${latest.fileName}).\n\nAby zaktualizować:\n1. Otwórz folder aktualizacji\n2. Pobierz najnowszy APK\n3. Zainstaluj plik na urządzeniu"
+                    updateStatusText = "Wykryto nową wersję: ${latest.version}"
+                    if (manual) {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(ONEDRIVE_UPDATES_URL)).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                    }
+                } else {
+                    updateStatusText = if (manual) "Brak nowszej wersji" else null
+                }
+            }.onFailure { error ->
+                updateStatusText = if (manual) {
+                    error.message ?: "Nie udało się sprawdzić aktualizacji"
+                } else {
+                    null
+                }
+            }
+
             isCheckingUpdate = false
         }
     }
 
     LaunchedEffect(autoUpdateEnabled) {
-        if (autoUpdateEnabled) {
-            updateStatusText = "Auto-update GitHub wyłączony. Użyj przycisku aktualizacji OneDrive."
+        if (autoUpdateEnabled && !checkedUpdateThisSession) {
+            checkedUpdateThisSession = true
+            checkForUpdates(manual = false)
         }
     }
 
@@ -629,6 +644,31 @@ fun ZulipHomeScreen(
                             updateStatusText = updateStatusText
                         )
                     }
+                }
+
+                val startupDialogText = startupUpdateMessage
+                if (!startupDialogText.isNullOrBlank()) {
+                    AlertDialog(
+                        onDismissRequest = { startupUpdateMessage = null },
+                        title = { Text("Nowa wersja dostępna") },
+                        text = { Text(startupDialogText) },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                startupUpdateMessage = null
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(ONEDRIVE_UPDATES_URL)).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(intent)
+                            }) {
+                                Text("Otwórz aktualizacje")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { startupUpdateMessage = null }) {
+                                Text("Później")
+                            }
+                        }
+                    )
                 }
             }
         }
