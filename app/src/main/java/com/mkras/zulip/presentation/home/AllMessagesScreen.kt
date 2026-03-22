@@ -178,6 +178,62 @@ fun AllMessagesScreen(
                                 }
                             }
 
+                            if (message.isStarred || message.isWildcardMentioned || message.isMentioned) {
+                                Row(
+                                    modifier = Modifier.padding(top = 6.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (message.isStarred) {
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = Color(0xFF53401A),
+                                            border = BorderStroke(1.dp, Color(0xFFFFD76E).copy(alpha = 0.6f))
+                                        ) {
+                                            Text(
+                                                text = "★ gwiazdka",
+                                                color = Color(0xFFFFD76E),
+                                                style = metaStyle,
+                                                fontWeight = FontWeight.Medium,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+
+                                    if (message.isWildcardMentioned) {
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = Color(0xFF422A18),
+                                            border = BorderStroke(1.dp, Color(0xFFFFA86C).copy(alpha = 0.6f))
+                                        ) {
+                                            Text(
+                                                text = "@all",
+                                                color = Color(0xFFFFB684),
+                                                style = metaStyle,
+                                                fontWeight = FontWeight.Medium,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+
+                                    if (message.isMentioned) {
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = Color(0xFF233B56),
+                                            border = BorderStroke(1.dp, Color(0xFF8CD9FF).copy(alpha = 0.6f))
+                                        ) {
+                                            Text(
+                                                text = "@wzmianka",
+                                                color = Color(0xFF8CD9FF),
+                                                style = metaStyle,
+                                                fontWeight = FontWeight.Medium,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
                             Spacer(modifier = Modifier.size(6.dp))
 
                             Surface(

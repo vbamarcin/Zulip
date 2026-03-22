@@ -712,7 +712,7 @@ private fun DmThreadView(
     LaunchedEffect(conversationKey, messages.size) {
         if (messages.isNotEmpty()) {
             if (autoScrolledToLatest && isNearBottom) {
-                listState.animateScrollToItem(messages.lastIndex)
+                listState.animateScrollToItem(messages.size - 1)  // Safe: avoids IndexOutOfBoundsException
             }
             onMessagesRendered(messages.takeLast(40).map { it.id })
         }
@@ -827,7 +827,7 @@ private fun DmThreadView(
         }
         if (showJumpToLatestFab) {
             FloatingActionButton(
-                onClick = { coroutineScope.launch { listState.animateScrollToItem(messages.lastIndex) } },
+                onClick = { coroutineScope.launch { listState.animateScrollToItem(messages.size - 1) } },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(8.dp),

@@ -13,6 +13,7 @@ import com.mkras.zulip.data.remote.dto.ReactionResponseDto
 import com.mkras.zulip.data.remote.dto.MessageActionResponseDto
 import com.mkras.zulip.data.remote.dto.UsersResponseDto
 import com.mkras.zulip.data.remote.dto.MyProfileResponseDto
+import com.mkras.zulip.data.remote.dto.PresenceResponseDto
 import okhttp3.MultipartBody
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -81,6 +82,9 @@ interface ZulipApiService {
 
     @GET("api/v1/users/me")
     suspend fun getMyProfile(): MyProfileResponseDto
+
+    @GET("api/v1/users/me/presence")
+    suspend fun getAllPresences(): PresenceResponseDto
 
     @FormUrlEncoded
     @POST("api/v1/messages")

@@ -237,7 +237,7 @@ class ZulipNotificationHelper @Inject constructor(
         val messageType = message.type.orEmpty()
         val recipients = parsePrivateRecipients(message.displayRecipient)
         val conversationKey = if (messageType == "private") {
-            buildConversationKey(recipients, message.senderEmail.orEmpty())
+            buildConversationKey(recipients, message.senderEmail.orEmpty(), selfEmail)
         } else {
             null
         }
@@ -267,9 +267,25 @@ class ZulipNotificationHelper @Inject constructor(
             .orEmpty()
     }
 
-    private fun buildConversationKey(recipients: List<Map<*, *>>, fallbackEmail: String): String {
-        val emails = recipients.mapNotNull { it["email"] as? String }
-        return if (emails.isEmpty()) fallbackEmail else emails.sorted().joinToString(",")
+    private fun buildConversationKey(recipients: List<Map<*, *>>, fallbackEmail: String, selfEmail: String): String {
+        val recipientEmails = recipients
+            .mapNotNull { it["email"] as? String }
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+
+        val participants = if (recipientEmails.isEmpty()) {
+            listOf(fallbackEmail)
+        } else {
+            recipientEmails
+        }
+
+        val withoutSelf = participants.filterNot { it.equals(selfEmail, ignoreCase = true) }
+        val normalized = (if (withoutSelf.isNotEmpty()) withoutSelf else participants)
+            .map { it.lowercase() }
+            .distinct()
+            .sorted()
+
+        return normalized.joinToString(",")
     }
 
     private fun buildDmDisplayName(recipients: List<Map<*, *>>, selfEmail: String, fallback: String): String {

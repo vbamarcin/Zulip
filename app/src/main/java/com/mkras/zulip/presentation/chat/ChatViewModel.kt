@@ -278,13 +278,14 @@ class ChatViewModel @Inject constructor(
                             resolveAvatarUrl(latest?.avatarUrl.orEmpty())
                         }
 
+                        val isMuted = secureSessionStorage.isDirectMessageMuted(key)
                         DmConversation(
                             conversationKey = key,
                             senderEmail = latest?.senderEmail ?: "",
                             displayName = latest?.dmDisplayName?.ifBlank { latest.senderFullName } ?: key,
                             avatarUrl = avatarUrl,
                             unreadCount = msgs.count {
-                                !it.isRead && !it.senderEmail.equals(currentUserEmail, ignoreCase = true)
+                                !it.isRead && !it.senderEmail.equals(currentUserEmail, ignoreCase = true) && !isMuted
                             },
                             latestTimestamp = latest?.timestampSeconds ?: 0L
                         )

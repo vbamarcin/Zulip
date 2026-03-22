@@ -413,11 +413,17 @@ class ChatRepositoryImpl @Inject constructor(
             credentials = BasicCredentials(auth.email, auth.apiKey)
         )
 
-        service.updateMessageFlags(
-            messagesJson = ids.joinToString(prefix = "[", postfix = "]"),
-            operation = "add",
-            flag = "read"
-        )
+        try {
+            service.updateMessageFlags(
+                messagesJson = ids.joinToString(prefix = "[", postfix = "]"),
+                operation = "add",
+                flag = "read"
+            )
+        } catch (e: Exception) {
+            // Network error: revert local DB update to prevent stale state
+            messageDao.updateReadFlags(ids = ids, isRead = false)
+            throw e
+        }
     }
 
     override suspend fun uploadFile(fileName: String, mimeType: String?, bytes: ByteArray): Result<UploadedFile> {

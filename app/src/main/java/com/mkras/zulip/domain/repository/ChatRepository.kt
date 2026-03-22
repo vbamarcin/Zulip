@@ -33,6 +33,7 @@ interface ChatRepository {
     suspend fun deleteMessage(messageId: Long): Result<Unit>
     suspend fun searchMessages(query: String): Result<List<MessageEntity>>
     suspend fun getDirectMessageCandidates(): Result<List<DirectMessageCandidate>>
+    suspend fun getPresence(): Result<Map<String, String>>
     suspend fun canModerateAllMessages(): Result<Boolean>
 }
 
