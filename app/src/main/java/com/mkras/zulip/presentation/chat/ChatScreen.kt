@@ -658,6 +658,16 @@ private fun DmThreadView(
                 listState.firstVisibleItemIndex < messages.size - 5
         }
     }
+    val isNearBottom by remember {
+        derivedStateOf {
+            val total = listState.layoutInfo.totalItemsCount
+            if (total <= 0) true
+            else {
+                val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                lastVisible >= total - 2
+            }
+        }
+    }
     var autoScrolledToLatest by remember(conversationKey) { mutableStateOf(false) }
     var highlightedMessageId by remember(conversationKey) { mutableStateOf<Long?>(null) }
     var isUploadingAttachment by remember { mutableStateOf(false) }
@@ -701,6 +711,9 @@ private fun DmThreadView(
 
     LaunchedEffect(conversationKey, messages.size) {
         if (messages.isNotEmpty()) {
+            if (autoScrolledToLatest && isNearBottom) {
+                listState.animateScrollToItem(messages.lastIndex)
+            }
             onMessagesRendered(messages.takeLast(40).map { it.id })
         }
     }
