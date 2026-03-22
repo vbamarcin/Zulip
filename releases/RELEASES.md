@@ -4,11 +4,49 @@ Tutaj dostępne są gotowe do instalacji wersje aplikacji Toya Zulip.
 
 ---
 
+## 📦 v1.6.1 (2026-03-22) — NAJNOWSZA
+
+**Plik:** `Toya-Zulip-v1.6.1.apk`  
+**Rozmiar:** 54.9 MB  
+
+### Zmiany w v1.6.1
+- ✅ Blokada biometryczna/PIN **włączona domyślnie** po instalacji
+- ✅ Fallback na PIN systemowy gdy brak biometrii w urządzeniu
+- ✅ Toggle w Ustawieniach zmieniony na "Blokada biometryczna / PIN"
+
+---
+
+## 📦 v1.6.0 (2026-03-22)
+
+**Plik:** `Toya-Zulip-v1.6.0.apk`  
+**Rozmiar:** 54.9 MB  
+
+### Nowe funkcje w v1.6.0
+- ✅ **Pulsująca obwódka wskaźnika pisania** — turkusowa animowana ramka wokół avatara gdy ktoś pisze (1000ms cykl, alpha 0.3→1.0)
+- ✅ **Kropki obecności użytkowników** — zielony (aktywny), żółty (bezczynny), szary (offline) na avatarach DM
+- ✅ **Wiadomości posortowane od najnowszych** w zakładce Wszystkie
+- ✅ **Zakładka Gwiazdki (★)** — widok wiadomości oznaczonych gwiazdką
+- ✅ **Przycisk "Przewiń do najnowszych" (FAB)** — pojawia się po przewinięciu w górę (Wszystkie + DM)
+- ✅ **Blokada biometryczna** — weryfikacja odciskiem/twarzą przy starcie i powrocie z tła
+- ✅ Powiadomia przy minimalzacji aplikacji (ON_RESUME lifecycle)
+
+---
+
+## 📦 v1.5.1 (2026-03-22)
+
+**Plik:** `Toya-Zulip-v1.5.1.apk`  
+**Rozmiar:** 54.9 MB  
+
+### Zmiany w v1.5.1
+- ✅ Powiadomienia zawierają nazwę kanału lub etykietę "Wiadomość bezpośrednia" (`setSubText`)
+- ✅ Zastąpiono przycisk "Wyłącz" ikoną DoNotDisturb w ekranie kanałów
+
+---
+
 ## 📦 v1.5.0 (2026-03-22)
 
 **Plik:** `Toya-Zulip-v1.5.0.apk`  
 **Rozmiar:** 54.7 MB  
-**Architektura:** ARM64 (obsługiwana przez praktycznie wszystkie współczesne urządzenia Android)  
 
 ### Nowe funkcje w v1.5.0
 - ✅ Dynamiczny system wersjonowania (BuildConfig)
@@ -17,46 +55,34 @@ Tutaj dostępne są gotowe do instalacji wersje aplikacji Toya Zulip.
 - ✅ Oznaczenia wiadomości (gwiazdka, @all, @mention)
 - ✅ Real-time synchronizacja (long-poll)
 - ✅ Bezpieczne przechowywanie poświadczeń (EncryptedSharedPreferences)
+- ✅ Projekt opublikowany na GitHub
 
-### Wymagania
+---
+
+## Wymagania (wszystkie wersje)
+
 - **Android:** 9.0+ (API 28+)
 - **RAM:** minimum 256 MB (rekomendowany 512 MB+)
 - **Serwer:** Zulip 2.1.0+
 
-### Instalacja
+## Instalacja
 
-#### Opcja 1: Z pliku APK (dla zaawansowanych)
-1. Pobierz `Toya-Zulip-v1.5.0.apk`
-2. Prześlij plik na swoje urządzenie Android
-3. Otwórz plik menedżerem plików
-4. Naciśnij "Zainstaluj"
-5. W ustawieniach może być wymagane: **Ustawienia → Bezpieczeństwo → Instalacja z nieznanych źródeł** (włącz dla tej aplikacji)
+1. Pobierz plik `.apk` z folderu `releases/`
+2. Prześlij na urządzenie Android
+3. Otwórz menedżerem plików i naciśnij "Zainstaluj"
+4. Jeśli wymagane: **Ustawienia → Bezpieczeństwo → Instalacja z nieznanych źródeł**
 
-#### Opcja 2: Przez Android Studio (dla developerów)
+Przez ADB:
 ```bash
-adb install releases/Toya-Zulip-v1.5.0.apk
+adb install releases/Toya-Zulip-v1.6.1.apk
 ```
-
-### Uwagi
-- APK jest **unsigned** (zbudowany w trybie debug/release)
-- Do produkcyjnego wdrażania w Play Store wymagany jest signing kluczem prywatnym
-- Niskie zużycie baterii dzięki smart notyfikacjom i pollingowi
-- Wszystkie poświadczenia przechowywane lokalnie (zero logowania na serwerze)
-
-### Lista zmian
-- Dodany dynamiczny system wersji z `BuildConfig.VERSION_NAME` i `BuildConfig.VERSION_CODE`
-- Strona ustawień wyświetla teraz wersję aplikacji
-- Nowe dokumenty: DOKUMENTACJA_UZYTKOWNIKA.md, DOKUMENTACJA_TECHNICZNA.md
-- Projekt wrzucony na GitHub
 
 ---
 
 ## ❓ Wsparcie
 
-Problemy z instalacją lub uruchomieniem?
 - Sprawdź [DOKUMENTACJA_UZYTKOWNIKA.md](../docs/DOKUMENTACJA_UZYTKOWNIKA.md)
 - Otwórz [Issue](../../issues) na GitHub
-- Sprawdź wymagania powyżej
 
 ---
 
@@ -65,6 +91,7 @@ Problemy z instalacją lub uruchomieniem?
 - ✅ HTTPS-only komunikacja
 - ✅ Basic Auth (email:apikey)
 - ✅ Encrypted local storage (AES256-GCM)
+- ✅ Blokada biometryczna / PIN (domyślnie włączona od v1.6.1)
 - ✅ Brak logowania poświadczeń w release builds
 
 ---
@@ -73,8 +100,10 @@ Problemy z instalacją lub uruchomieniem?
 
 | Wersja | Data | APK | Opis |
 |--------|------|-----|------|
+| **1.6.1** | 2026-03-22 | ✅ | Biometria/PIN domyślnie włączona |
+| 1.6.0 | 2026-03-22 | ✅ | 6 nowych funkcji: obecność, animacja pisania, FAB, gwiazdki, biometria |
+| 1.5.1 | 2026-03-22 | ✅ | Kontekst powiadomień (nazwa kanału / DM) |
 | 1.5.0 | 2026-03-22 | ✅ | Wystabilizowana wersja z pełną dokumentacją |
-| 1.0.0 | 2026-01-01 | — | Początkowa wersja (research) |
 
 ---
 
