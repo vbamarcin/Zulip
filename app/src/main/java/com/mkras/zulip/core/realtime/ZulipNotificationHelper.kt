@@ -104,9 +104,22 @@ class ZulipNotificationHelper @Inject constructor(
         val channelId = if (isPrivate) CHANNEL_DM_MESSAGES else CHANNEL_STREAM_MESSAGES
         val groupKey = if (isPrivate) GROUP_DM else GROUP_STREAM
 
+        val subText = if (isPrivate) {
+            "Wiadomość prywatna"
+        } else {
+            val streamName = message.displayRecipient as? String
+            val topic = message.subject
+            when {
+                !streamName.isNullOrBlank() && !topic.isNullOrBlank() -> "#$streamName > $topic"
+                !streamName.isNullOrBlank() -> "#$streamName"
+                else -> "Kanał"
+            }
+        }
+
         val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ikona)
             .setContentTitle(title)
+            .setSubText(subText)
             .setContentText(plainContent)
             .setStyle(NotificationCompat.BigTextStyle().bigText(plainContent))
             .setAutoCancel(true)
