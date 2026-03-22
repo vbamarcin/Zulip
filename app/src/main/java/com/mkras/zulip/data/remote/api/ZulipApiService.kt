@@ -101,6 +101,12 @@ interface ZulipApiService {
         @Part file: MultipartBody.Part
     ): UploadFileResponseDto
 
+    @Multipart
+    @POST("json/user_uploads")
+    suspend fun uploadFileLegacy(
+        @Part file: MultipartBody.Part
+    ): UploadFileResponseDto
+
     @FormUrlEncoded
     @POST("api/v1/messages/{message_id}/reactions")
     suspend fun addReaction(

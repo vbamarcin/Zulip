@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.map
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import retrofit2.HttpException
 
 @Singleton
 class ChatRepositoryImpl @Inject constructor(
@@ -390,7 +391,15 @@ class ChatRepositoryImpl @Inject constructor(
 
             val requestBody = bytes.toRequestBody((mimeType ?: "application/octet-stream").toMediaTypeOrNull())
             val filePart = MultipartBody.Part.createFormData("file", fileName, requestBody)
-            val response = service.uploadFile(filePart)
+            val response = try {
+                service.uploadFile(filePart)
+            } catch (http: HttpException) {
+                if (http.code() == 403 || http.code() == 404) {
+                    service.uploadFileLegacy(filePart)
+                } else {
+                    throw http
+                }
+            }
             val uploadedUrl = response.url ?: response.uri
 
             if (response.result == "success" && !uploadedUrl.isNullOrBlank()) {
@@ -403,6 +412,22 @@ class ChatRepositoryImpl @Inject constructor(
             } else {
                 Result.failure(Exception(response.message.ifBlank { "Failed to upload file" }))
             }
+        } catch (e: HttpException) {
+            val body = runCatching { e.response()?.errorBody()?.string().orEmpty() }.getOrDefault("")
+            val apiMessage = Regex("\"msg\"\\s*:\\s*\"([^\"]+)\"")
+                .find(body)
+                ?.groupValues
+                ?.getOrNull(1)
+                ?.replace("\\\\\"", "\"")
+                ?.trim()
+
+            val hint = if (e.code() == 403) {
+                "Upload zablokowany po stronie serwera (uprawnienia, limit albo polityka uploadu)."
+            } else {
+                null
+            }
+            val message = listOfNotNull(apiMessage, hint, "HTTP ${e.code()}").joinToString(" ").ifBlank { "Failed to upload file" }
+            Result.failure(Exception(message))
         } catch (e: Exception) {
             Result.failure(e)
         }
