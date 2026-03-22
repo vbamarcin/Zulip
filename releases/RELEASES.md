@@ -1,8 +1,11 @@
 # Releases
 
-latest_version: 1.6.22
-latest_apk: Toya-Zulip-v1.6.22.apk
-latest_url: https://github.com/vbamarcin/Zulip/raw/main/releases/Toya-Zulip-v1.6.22.apk
+latest_version: 1.6.23
+latest_apk: Toya-Zulip-v1.6.23.apk
+latest_url: https://github.com/vbamarcin/Zulip/raw/main/releases/Toya-Zulip-v1.6.23.apk
+
+## v1.6.23
+Toya-Zulip-v1.6.23.apk
 
 ## v1.6.22
 Toya-Zulip-v1.6.22.apk

@@ -71,6 +71,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.Image
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import com.mkras.zulip.core.security.StoredAuth
 import com.mkras.zulip.NotificationNavigationTarget
@@ -194,6 +195,8 @@ fun ZulipHomeScreen(
     }
 
     var selectedTab by rememberSaveable { mutableStateOf(0) }
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp
+    val showBottomTabLabels = screenWidthDp >= 390
     val imageAuthHeader = rememberSharedImageAuthHeader()
 
     fun checkForUpdates(manual: Boolean = false) {
@@ -354,7 +357,13 @@ fun ZulipHomeScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(if (compactMode) 76.dp else 88.dp)
+                        .height(
+                            when {
+                                !showBottomTabLabels -> if (compactMode) 62.dp else 68.dp
+                                compactMode -> 76.dp
+                                else -> 88.dp
+                            }
+                        )
                         .background(TabBarBg, RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
                         .border(1.dp, TabBarBorder, RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
                         .padding(horizontal = 8.dp),
@@ -406,12 +415,14 @@ fun ZulipHomeScreen(
                                     }
                                 }
                             }
-                            Text(
-                                text = tab.label,
-                                fontSize = if (compactMode) 9.sp else 10.sp,
-                                color = if (isSelected) TabSelected else TabUnselected,
-                                modifier = Modifier.padding(top = 4.dp)
-                            )
+                            if (showBottomTabLabels) {
+                                Text(
+                                    text = tab.label,
+                                    fontSize = if (compactMode) 9.sp else 10.sp,
+                                    color = if (isSelected) TabSelected else TabUnselected,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
                         }
                     }
                 }
