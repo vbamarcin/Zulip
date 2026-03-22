@@ -2,7 +2,9 @@ package com.mkras.zulip.presentation.home
 
 import com.mkras.zulip.BuildConfig
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -83,8 +85,6 @@ import com.mkras.zulip.presentation.chat.ChatViewModel
 import com.mkras.zulip.presentation.channels.ChannelsScreen
 import com.mkras.zulip.presentation.channels.ChannelsViewModel
 import com.mkras.zulip.presentation.search.SearchScreen
-import com.mkras.zulip.core.update.GitHubReleaseInfo
-import com.mkras.zulip.core.update.GitHubUpdateManager
 import kotlinx.coroutines.launch
 
 private data class RootTab(
@@ -107,6 +107,7 @@ private val TabUnselected = Color(0xFFA8B4C7)
 private val TabBadgeBg    = Color(0xFF8A3B2E)
 private const val UPDATE_REPO_OWNER = "vbamarcin"
 private const val UPDATE_REPO_NAME = "Zulip"
+private const val ONEDRIVE_UPDATES_URL = "https://1drv.ms/f/c/c163d95441785e7e/IgDA8mbdi52TTYS8kK_ELwAAAXfxqkRvfvMG8GPiUFGHEsA?e=36gfeF"
 private const val BUILTIN_GITHUB_TOKEN =
     "github_pat_" +
         "11A3CKDDI01RVOg20V6RoH_DxglM1CEiLszqVTSsjRsdD4Cew0JvUWKwlyIGlOyAswTQVT4HVTNLGZVmWF"
@@ -166,10 +167,7 @@ fun ZulipHomeScreen(
     var biometricLockEnabled by rememberSaveable { mutableStateOf(initialBiometricLockEnabled) }
     var autoUpdateEnabled by rememberSaveable { mutableStateOf(initialAutoUpdateEnabled) }
     var isCheckingUpdate by rememberSaveable { mutableStateOf(false) }
-    var isInstallingUpdate by rememberSaveable { mutableStateOf(false) }
     var updateStatusText by rememberSaveable { mutableStateOf<String?>(null) }
-    var checkedUpdateThisSession by rememberSaveable { mutableStateOf(false) }
-    var availableRelease by remember { mutableStateOf<GitHubReleaseInfo?>(null) }
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val gitHubToken = BUILTIN_GITHUB_TOKEN
@@ -198,33 +196,30 @@ fun ZulipHomeScreen(
     val imageAuthHeader = rememberSharedImageAuthHeader()
 
     fun checkForUpdates(manual: Boolean = false) {
+        if (!manual) {
+            return
+        }
+
         coroutineScope.launch {
             isCheckingUpdate = true
-            updateStatusText = if (manual) "Sprawdzanie aktualizacji..." else null
-            val result = GitHubUpdateManager.checkForUpdate(
-                owner = UPDATE_REPO_OWNER,
-                repo = UPDATE_REPO_NAME,
-                currentVersionName = BuildConfig.VERSION_NAME,
-                token = gitHubToken
-            )
-            isCheckingUpdate = false
-            result.onSuccess { release ->
-                availableRelease = release
-                updateStatusText = if (release != null) {
-                    "Dostępna aktualizacja: ${release.tagName}"
-                } else {
-                    "Aplikacja jest aktualna"
+            updateStatusText = "Otwieranie OneDrive z aktualizacjami..."
+            runCatching {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(ONEDRIVE_UPDATES_URL)).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
+                context.startActivity(intent)
+            }.onSuccess {
+                updateStatusText = "Otwarto OneDrive. Pobierz najnowszy APK i zainstaluj."
             }.onFailure { error ->
-                updateStatusText = error.message ?: "Nie udało się sprawdzić aktualizacji"
+                updateStatusText = error.message ?: "Nie udało się otworzyć linku aktualizacji"
             }
+            isCheckingUpdate = false
         }
     }
 
     LaunchedEffect(autoUpdateEnabled) {
-        if (!checkedUpdateThisSession && autoUpdateEnabled) {
-            checkedUpdateThisSession = true
-            checkForUpdates(manual = false)
+        if (autoUpdateEnabled) {
+            updateStatusText = "Auto-update GitHub wyłączony. Użyj przycisku aktualizacji OneDrive."
         }
     }
 
@@ -639,51 +634,6 @@ fun ZulipHomeScreen(
         }
     }
 
-    val releaseToInstall = availableRelease
-    if (releaseToInstall != null) {
-        AlertDialog(
-            onDismissRequest = { availableRelease = null },
-            title = { Text("Dostępna aktualizacja ${releaseToInstall.tagName}") },
-            text = { Text("Znaleziono nowszą wersję aplikacji (${releaseToInstall.apkName}).") },
-            confirmButton = {
-                TextButton(
-                    enabled = !isInstallingUpdate,
-                    onClick = {
-                        coroutineScope.launch {
-                            isInstallingUpdate = true
-                            val token = gitHubToken.trim()
-                            val result = GitHubUpdateManager.downloadAndInstall(
-                                context = context,
-                                release = releaseToInstall,
-                                token = token
-                            )
-                            isInstallingUpdate = false
-                            result.onSuccess {
-                                updateStatusText = "Uruchomiono instalator aktualizacji"
-                                availableRelease = null
-                            }.onFailure { error ->
-                                updateStatusText = error.message ?: "Nie udało się zainstalować aktualizacji"
-                            }
-                        }
-                    }
-                ) {
-                    if (isInstallingUpdate) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Text("Pobierz i zainstaluj")
-                    }
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { availableRelease = null }) {
-                    Text("Później")
-                }
-            }
-        )
-    }
     }
 }
 
@@ -828,7 +778,7 @@ private fun SettingsPanel(
                 SettingsToggleRow(label = "Blokada biometryczna / PIN", checked = biometricLockEnabled, onCheckedChange = onBiometricLockChanged)
 
                 Text(text = "Aktualizacje", color = Color(0xFFF2F6FF), fontWeight = FontWeight.Medium)
-                SettingsToggleRow(label = "Automatyczne aktualizacje (GitHub)", checked = autoUpdateEnabled, onCheckedChange = onAutoUpdateChanged)
+                SettingsToggleRow(label = "Automatyczne aktualizacje (informacyjne)", checked = autoUpdateEnabled, onCheckedChange = onAutoUpdateChanged)
                 OutlinedButton(
                     onClick = onCheckUpdatesNow,
                     enabled = !isCheckingUpdate,
@@ -840,7 +790,7 @@ private fun SettingsPanel(
                             strokeWidth = 2.dp
                         )
                     } else {
-                        Text("Sprawdź aktualizacje")
+                        Text("Otwórz aktualizacje (OneDrive)")
                     }
                 }
                 if (!updateStatusText.isNullOrBlank()) {

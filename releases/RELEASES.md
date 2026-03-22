@@ -4,7 +4,18 @@ Tutaj dostępne są gotowe do instalacji wersje aplikacji Toya Zulip.
 
 ---
 
-## 📦 v1.6.6 (2026-03-22) — NAJNOWSZA
+## 📦 v1.6.7 (2026-03-22) — NAJNOWSZA
+
+**Plik:** `Toya-Zulip-v1.6.7.apk`  
+**Rozmiar:** 55.1 MB  
+
+### Zmiany w v1.6.7
+- ✅ Aktualizacje przeniesione na OneDrive link (bez GitHub API i błędu 404)
+- ✅ Przycisk ręcznej aktualizacji otwiera bezpośrednio udostępniony folder OneDrive
+
+---
+
+## 📦 v1.6.6 (2026-03-22)
 
 **Plik:** `Toya-Zulip-v1.6.6.apk`  
 **Rozmiar:** 55.1 MB  
@@ -132,7 +143,7 @@ Tutaj dostępne są gotowe do instalacji wersje aplikacji Toya Zulip.
 
 Przez ADB:
 ```bash
-adb install releases/Toya-Zulip-v1.6.6.apk
+adb install releases/Toya-Zulip-v1.6.7.apk
 ```
 
 ---
@@ -158,6 +169,7 @@ adb install releases/Toya-Zulip-v1.6.6.apk
 
 | Wersja | Data | APK | Opis |
 |--------|------|-----|------|
+| **1.6.7** | 2026-03-22 | ✅ | Aktualizacje przez OneDrive link (bez GitHub API) |
 | **1.6.6** | 2026-03-22 | ✅ | Fix 404 dla aktualizacji, fallback na folder releases/ |
 | **1.6.5** | 2026-03-22 | ✅ | Zaszyty token prywatnego GitHub i nowy układ Ustawień |
 | **1.6.4** | 2026-03-22 | ✅ | Poprawka licznika badge na ikonie aplikacji |
