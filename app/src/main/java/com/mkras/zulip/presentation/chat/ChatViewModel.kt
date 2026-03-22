@@ -317,11 +317,18 @@ class ChatViewModel @Inject constructor(
                 if (!email.isNullOrBlank()) {
                     _uiState.update { state ->
                         val updated = state.presenceByEmail.toMutableMap()
-                        val status = event.status
-                        if (status.isNullOrBlank() || status == "offline") {
+                        val normalizedStatus = when (event.status?.trim()?.lowercase()) {
+                            "active", "online" -> "active"
+                            "idle", "away" -> "idle"
+                            "offline" -> "offline"
+                            null, "" -> null
+                            else -> "offline"
+                        }
+
+                        if (normalizedStatus == null || normalizedStatus == "offline") {
                             updated.remove(email)
                         } else {
-                            updated[email] = status
+                            updated[email] = normalizedStatus
                         }
                         state.copy(presenceByEmail = updated)
                     }

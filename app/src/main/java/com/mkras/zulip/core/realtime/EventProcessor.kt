@@ -56,11 +56,16 @@ class EventProcessor @Inject constructor(
                 )
             }
             "presence" -> {
+                val statusFromPresenceObject = event.presence
+                    ?.let { presence ->
+                        presence["aggregated"]?.status
+                            ?: presence.values.firstNotNullOfOrNull { it.status }
+                    }
                 _presenceEvents.emit(
                     PresenceEvent(
                         userId = event.userId,
                         email = event.email ?: event.senderEmail,
-                        status = event.presenceStatus
+                        status = event.presenceStatus ?: statusFromPresenceObject
                     )
                 )
             }

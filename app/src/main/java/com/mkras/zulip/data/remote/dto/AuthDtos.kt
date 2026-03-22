@@ -36,6 +36,7 @@ data class EventDto(
     @Json(name = "sender_email") val senderEmail: String? = null,
     @Json(name = "emoji_name") val emojiName: String? = null,
     @Json(name = "status") val presenceStatus: String? = null,
+    @Json(name = "presence") val presence: Map<String, PresenceClientDto>? = null,
     @Json(name = "email") val email: String? = null,
     @Json(name = "content") val content: String? = null,
     @Json(name = "subject") val subject: String? = null,
@@ -44,6 +45,10 @@ data class EventDto(
     @Json(name = "stream_name") val streamName: String? = null,
     @Json(name = "rendering_only") val renderingOnly: Boolean? = null,
     @Json(name = "message_type") val messageType: String? = null
+)
+
+data class PresenceClientDto(
+    @Json(name = "status") val status: String? = null
 )
 
 data class EventMessageDto(
