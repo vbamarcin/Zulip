@@ -1,0 +1,86 @@
+# Gradle
+.gradle/
+build/
+*.gradle.lock
+
+# Android Studio
+.idea/
+*.iml
+*.apk
+*.ap_
+*.dex
+*.class
+.classpath
+.project
+.settings/
+local.properties
+*.log
+*.swp
+*~
+.DS_Store
+
+# Build artifacts
+/app/build/
+/buildSrc/build/
+
+# Kotlin
+.kotlin/
+out/
+
+# IDE
+.vscode/
+.project
+.pydevproject
+*.sublime-project
+*.sublime-workspace
+.c9/
+*.launch
+.settings/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+.mvn/timing.properties
+
+# JetBrains IDE
+*.iml
+*.iws
+*.ipr
+.idea/
+out/
+
+# misc
+*.o
+*.so
+*.dylib
+*.lib
+*.exe
+*.com
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local environment files
+.env
+.env.local
+.env.*.local
+
+# AndroidStudio specific (safe to ignore)
+gradlew.bat
+gradlew
