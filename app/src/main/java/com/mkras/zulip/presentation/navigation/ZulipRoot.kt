@@ -43,6 +43,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.mkras.zulip.BuildConfig
 import com.mkras.zulip.core.realtime.EventServiceController
 import com.mkras.zulip.NotificationNavigationTarget
 import com.mkras.zulip.R
@@ -276,6 +277,11 @@ private fun StartupSplashScreen() {
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
+              Text(
+                  text = "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                  color = Color(0xFFBFD3EE),
+                  style = MaterialTheme.typography.labelMedium
+              )
             Text(
                 text = "SysADM Toya",
                 color = Color(0xFFBFD3EE),
