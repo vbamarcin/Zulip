@@ -33,6 +33,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -58,6 +59,7 @@ fun ZulipRoot(
     onNotificationTargetConsumed: () -> Unit = {},
     viewModel: AuthViewModel = hiltViewModel()
 ) {
+    val lockTimeoutMs = 60_000L
     val uiState = viewModel.uiState.collectAsStateWithLifecycle().value
     val context = LocalContext.current
     var showStartupSplash by rememberSaveable { mutableStateOf(true) }
@@ -83,14 +85,31 @@ fun ZulipRoot(
     }
 
     val session = uiState.currentSession
-    var biometricAuthenticated by remember { mutableStateOf(false) }
+    var biometricAuthenticated by remember(session?.serverUrl, session?.email) { mutableStateOf(false) }
     var isHandlingAttachment by remember { mutableStateOf(false) }
+    var lastInteractionAtMs by remember { mutableStateOf(System.currentTimeMillis()) }
+    var backgroundedAtMs by remember { mutableStateOf<Long?>(null) }
+    val biometricEnabled = session != null && viewModel.getBiometricLockEnabled()
     val lifecycleOwner = LocalLifecycleOwner.current
 
     DisposableEffect(lifecycleOwner, session) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME && session != null) {
-                biometricAuthenticated = false
+            if (session == null || !biometricEnabled) return@LifecycleEventObserver
+            when (event) {
+                Lifecycle.Event.ON_PAUSE -> {
+                    backgroundedAtMs = System.currentTimeMillis()
+                }
+                Lifecycle.Event.ON_RESUME -> {
+                    val now = System.currentTimeMillis()
+                    val backgroundTimeout = backgroundedAtMs?.let { now - it >= lockTimeoutMs } == true
+                    val idleTimeout = now - lastInteractionAtMs >= lockTimeoutMs
+                    if (backgroundTimeout || idleTimeout) {
+                        biometricAuthenticated = false
+                    }
+                    lastInteractionAtMs = now
+                    backgroundedAtMs = null
+                }
+                else -> Unit
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -113,6 +132,16 @@ fun ZulipRoot(
         }
     }
 
+    LaunchedEffect(session?.serverUrl, session?.email, biometricEnabled, biometricAuthenticated, isHandlingAttachment) {
+        while (session != null && biometricEnabled && biometricAuthenticated && !isHandlingAttachment) {
+            delay(5_000)
+            if (System.currentTimeMillis() - lastInteractionAtMs >= lockTimeoutMs) {
+                biometricAuthenticated = false
+                break
+            }
+        }
+    }
+
     if (session == null) {
         LoginScreen(
             uiState = uiState,
@@ -123,46 +152,65 @@ fun ZulipRoot(
             onSubmit = viewModel::submit
         )
     } else {
-        val biometricEnabled = viewModel.getBiometricLockEnabled()
         if (biometricEnabled && !biometricAuthenticated && !isHandlingAttachment) {
             BiometricLockScreen(
-                onAuthenticated = { biometricAuthenticated = true },
+                onAuthenticated = {
+                    biometricAuthenticated = true
+                    lastInteractionAtMs = System.currentTimeMillis()
+                    backgroundedAtMs = null
+                },
                 onLogout = viewModel::logout
             )
         } else {
-        ZulipHomeScreen(
-            session = session,
-            onLogout = viewModel::logout,
-            onAttachmentOperationStart = { isHandlingAttachment = true },
-            onAttachmentOperationEnd = { isHandlingAttachment = false },
-            initialCompactMode = viewModel.getCompactMode(),
-            onSaveCompactMode = viewModel::saveCompactMode,
-            initialFontScale = viewModel.getFontScale(),
-            onSaveFontScale = viewModel::saveFontScale,
-            initialMarkdownEnabled = viewModel.getMarkdownEnabled(),
-            onSaveMarkdownEnabled = viewModel::saveMarkdownEnabled,
-            initialNotificationsEnabled = viewModel.getNotificationsEnabled(),
-            onSaveNotificationsEnabled = viewModel::saveNotificationsEnabled,
-            initialDmNotificationsEnabled = viewModel.getDmNotificationsEnabled(),
-            onSaveDmNotificationsEnabled = viewModel::saveDmNotificationsEnabled,
-            initialChannelNotificationsEnabled = viewModel.getChannelNotificationsEnabled(),
-            onSaveChannelNotificationsEnabled = viewModel::saveChannelNotificationsEnabled,
-            onResetAllNotifications = viewModel::resetAllNotificationPreferences,
-            isDirectMessageMuted = viewModel::isDirectMessageMuted,
-            onSetDirectMessageMuted = viewModel::setDirectMessageMuted,
-            isChannelMuted = viewModel::isChannelMuted,
-            onSetChannelMuted = viewModel::setChannelMuted,
-            isChannelDisabled = viewModel::isChannelDisabled,
-            onSetChannelDisabled = viewModel::setChannelDisabled,
-            getMutedChannels = viewModel::getMutedChannels,
-            getDisabledChannels = viewModel::getDisabledChannels,
-            notificationTarget = notificationTarget,
-            onNotificationTargetConsumed = onNotificationTargetConsumed,
-            initialBiometricLockEnabled = viewModel.getBiometricLockEnabled(),
-            onSaveBiometricLockEnabled = viewModel::saveBiometricLockEnabled,
-            initialAutoUpdateEnabled = viewModel.getAutoUpdateEnabled(),
-            onSaveAutoUpdateEnabled = viewModel::saveAutoUpdateEnabled
-        )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(session.serverUrl, session.email, biometricEnabled) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                awaitPointerEvent()
+                                lastInteractionAtMs = System.currentTimeMillis()
+                            }
+                        }
+                    }
+            ) {
+                ZulipHomeScreen(
+                    session = session,
+                    onLogout = viewModel::logout,
+                    onAttachmentOperationStart = { isHandlingAttachment = true },
+                    onAttachmentOperationEnd = {
+                        isHandlingAttachment = false
+                        lastInteractionAtMs = System.currentTimeMillis()
+                    },
+                    initialCompactMode = viewModel.getCompactMode(),
+                    onSaveCompactMode = viewModel::saveCompactMode,
+                    initialFontScale = viewModel.getFontScale(),
+                    onSaveFontScale = viewModel::saveFontScale,
+                    initialMarkdownEnabled = viewModel.getMarkdownEnabled(),
+                    onSaveMarkdownEnabled = viewModel::saveMarkdownEnabled,
+                    initialNotificationsEnabled = viewModel.getNotificationsEnabled(),
+                    onSaveNotificationsEnabled = viewModel::saveNotificationsEnabled,
+                    initialDmNotificationsEnabled = viewModel.getDmNotificationsEnabled(),
+                    onSaveDmNotificationsEnabled = viewModel::saveDmNotificationsEnabled,
+                    initialChannelNotificationsEnabled = viewModel.getChannelNotificationsEnabled(),
+                    onSaveChannelNotificationsEnabled = viewModel::saveChannelNotificationsEnabled,
+                    onResetAllNotifications = viewModel::resetAllNotificationPreferences,
+                    isDirectMessageMuted = viewModel::isDirectMessageMuted,
+                    onSetDirectMessageMuted = viewModel::setDirectMessageMuted,
+                    isChannelMuted = viewModel::isChannelMuted,
+                    onSetChannelMuted = viewModel::setChannelMuted,
+                    isChannelDisabled = viewModel::isChannelDisabled,
+                    onSetChannelDisabled = viewModel::setChannelDisabled,
+                    getMutedChannels = viewModel::getMutedChannels,
+                    getDisabledChannels = viewModel::getDisabledChannels,
+                    notificationTarget = notificationTarget,
+                    onNotificationTargetConsumed = onNotificationTargetConsumed,
+                    initialBiometricLockEnabled = viewModel.getBiometricLockEnabled(),
+                    onSaveBiometricLockEnabled = viewModel::saveBiometricLockEnabled,
+                    initialAutoUpdateEnabled = viewModel.getAutoUpdateEnabled(),
+                    onSaveAutoUpdateEnabled = viewModel::saveAutoUpdateEnabled
+                )
+            }
         }
     }
 }
