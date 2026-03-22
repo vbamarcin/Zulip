@@ -4,7 +4,18 @@ Tutaj dostępne są gotowe do instalacji wersje aplikacji Toya Zulip.
 
 ---
 
-## 📦 v1.6.1 (2026-03-22) — NAJNOWSZA
+## 📦 v1.6.2 (2026-03-22) — NAJNOWSZA
+
+**Plik:** `Toya-Zulip-v1.6.2.apk`  
+**Rozmiar:** 54.9 MB  
+
+### Zmiany w v1.6.2
+- ✅ Przywrócone oznaczenia statusów wiadomości w widoku „Wszystkie”: **★ gwiazdka**, **@all**, **@wzmianka**
+- ✅ Naprawione mapowanie statusów obecności użytkowników (normalizacja email do lowercase)
+
+---
+
+## 📦 v1.6.1 (2026-03-22)
 
 **Plik:** `Toya-Zulip-v1.6.1.apk`  
 **Rozmiar:** 54.9 MB  
@@ -74,7 +85,7 @@ Tutaj dostępne są gotowe do instalacji wersje aplikacji Toya Zulip.
 
 Przez ADB:
 ```bash
-adb install releases/Toya-Zulip-v1.6.1.apk
+adb install releases/Toya-Zulip-v1.6.2.apk
 ```
 
 ---
@@ -100,6 +111,7 @@ adb install releases/Toya-Zulip-v1.6.1.apk
 
 | Wersja | Data | APK | Opis |
 |--------|------|-----|------|
+| **1.6.2** | 2026-03-22 | ✅ | Naprawa widoczności gwiazdek/@wzmianek i statusów obecności |
 | **1.6.1** | 2026-03-22 | ✅ | Biometria/PIN domyślnie włączona |
 | 1.6.0 | 2026-03-22 | ✅ | 6 nowych funkcji: obecność, animacja pisania, FAB, gwiazdki, biometria |
 | 1.5.1 | 2026-03-22 | ✅ | Kontekst powiadomień (nazwa kanału / DM) |

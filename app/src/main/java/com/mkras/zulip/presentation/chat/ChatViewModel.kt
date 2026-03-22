@@ -302,7 +302,7 @@ class ChatViewModel @Inject constructor(
     private fun observePresenceEvents() {
         viewModelScope.launch {
             eventProcessor.presenceEvents.collect { event ->
-                val email = event.email
+                val email = event.email?.trim()?.lowercase()
                 if (!email.isNullOrBlank()) {
                     _uiState.update { state ->
                         val updated = state.presenceByEmail.toMutableMap()
