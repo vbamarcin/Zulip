@@ -125,7 +125,8 @@ class ZulipNotificationHelper @Inject constructor(
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setGroup(groupKey)
-            .setNumber(activeNotificationCount(groupKey) + 1)
+            // Keep child notifications at 1 to avoid launcher badge overcounting (e.g. 1+2+3+1).
+            .setNumber(1)
             .setContentIntent(mainPendingIntent(message, selfEmail))
             .build()
 

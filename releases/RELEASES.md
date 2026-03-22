@@ -4,7 +4,18 @@ Tutaj dostępne są gotowe do instalacji wersje aplikacji Toya Zulip.
 
 ---
 
-## 📦 v1.6.3 (2026-03-22) — NAJNOWSZA
+## 📦 v1.6.4 (2026-03-22) — NAJNOWSZA
+
+**Plik:** `Toya-Zulip-v1.6.4.apk`  
+**Rozmiar:** 55.0 MB  
+
+### Zmiany w v1.6.4
+- ✅ Poprawione zliczanie badge na ikonie aplikacji (bez zawyżania 1+2+3...)
+- ✅ Licznik na ikonie odpowiada rzeczywistej liczbie nieprzeczytanych powiadomień
+
+---
+
+## 📦 v1.6.3 (2026-03-22)
 
 **Plik:** `Toya-Zulip-v1.6.3.apk`  
 **Rozmiar:** 55.0 MB  
@@ -98,7 +109,7 @@ Tutaj dostępne są gotowe do instalacji wersje aplikacji Toya Zulip.
 
 Przez ADB:
 ```bash
-adb install releases/Toya-Zulip-v1.6.3.apk
+adb install releases/Toya-Zulip-v1.6.4.apk
 ```
 
 ---
@@ -124,6 +135,7 @@ adb install releases/Toya-Zulip-v1.6.3.apk
 
 | Wersja | Data | APK | Opis |
 |--------|------|-----|------|
+| **1.6.4** | 2026-03-22 | ✅ | Poprawka licznika badge na ikonie aplikacji |
 | **1.6.3** | 2026-03-22 | ✅ | Auto-update z prywatnego GitHub Releases (token) |
 | **1.6.2** | 2026-03-22 | ✅ | Naprawa widoczności gwiazdek/@wzmianek i statusów obecności |
 | **1.6.1** | 2026-03-22 | ✅ | Biometria/PIN domyślnie włączona |
