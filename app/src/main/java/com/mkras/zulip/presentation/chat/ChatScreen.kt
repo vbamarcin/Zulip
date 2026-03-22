@@ -155,9 +155,14 @@ fun ChatScreen(
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    LaunchedEffect(uiState.privateMessages.size) {
-        val recent = uiState.privateMessages.takeLast(30).map { it.id }
-        onMessagesRendered(recent)
+    LaunchedEffect(uiState.privateMessages.size, uiState.selectedConversationKey) {
+        val key = uiState.selectedConversationKey ?: return@LaunchedEffect
+        val ids = uiState.privateMessages
+            .filter { it.conversationKey == key }
+            .map { it.id }
+        if (ids.isNotEmpty()) {
+            onMessagesRendered(ids)
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -724,7 +729,7 @@ private fun DmThreadView(
             if (autoScrolledToLatest && isNearBottom) {
                 listState.animateScrollToItem(messages.size - 1)  // Safe: avoids IndexOutOfBoundsException
             }
-            onMessagesRendered(messages.takeLast(40).map { it.id })
+            onMessagesRendered(messages.map { it.id })
         }
     }
 

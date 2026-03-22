@@ -21,7 +21,7 @@ interface ChatRepository {
     ): Result<Int>
     suspend fun markMessagesAsRead(ids: List<Long>)
     suspend fun uploadFile(fileName: String, mimeType: String?, bytes: ByteArray): Result<UploadedFile>
-    suspend fun sendMessage(type: String, to: String, content: String, topic: String? = null): Result<Long>
+    suspend fun sendMessage(type: String, to: String, content: String, topic: String? = null, displayName: String = ""): Result<Long>
     suspend fun addReaction(messageId: Long, emojiName: String): Result<Unit>
     suspend fun removeReaction(messageId: Long, emojiName: String): Result<Unit>
     suspend fun editMessage(

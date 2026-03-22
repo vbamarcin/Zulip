@@ -433,7 +433,7 @@ class ChatRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun sendMessage(type: String, to: String, content: String, topic: String?): Result<Long> {
+    override suspend fun sendMessage(type: String, to: String, content: String, topic: String?, displayName: String): Result<Long> {
         return try {
             val auth = secureSessionStorage.getAuth() ?: return Result.failure(Exception("Not authenticated"))
             val service = zulipApiFactory.create(
@@ -469,7 +469,7 @@ class ChatRepositoryImpl @Inject constructor(
                         avatarUrl = "",
                         messageType = normalizedType,
                         conversationKey = if (normalizedType == "private") normalizePrivateConversationKey(to, auth.email) else "",
-                        dmDisplayName = if (normalizedType == "private") to else ""
+                        dmDisplayName = if (normalizedType == "private") displayName.ifBlank { to } else ""
                     )
                 )
                 Result.success(response.messageId)

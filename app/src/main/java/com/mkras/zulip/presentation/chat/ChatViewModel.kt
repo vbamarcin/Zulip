@@ -411,7 +411,13 @@ class ChatViewModel @Inject constructor(
 
     fun sendMessage(type: String, to: String, content: String, topic: String? = null, onSuccess: (Long) -> Unit = {}, onError: (String) -> Unit = {}) {
         viewModelScope.launch {
-            chatRepository.sendMessage(type, to, content, topic)
+            val displayName = if (type.trim().lowercase() == "private") {
+                val emails = to.split(',').map { it.trim().lowercase() }.toSet()
+                _uiState.value.newDmPeople
+                    .filter { it.email.trim().lowercase() in emails }
+                    .joinToString(", ") { it.fullName }
+            } else ""
+            chatRepository.sendMessage(type, to, content, topic, displayName)
                 .onSuccess { messageId ->
                     _uiState.update { it.copy(sendMessageError = null) }
                     resyncOnResume()
@@ -452,7 +458,13 @@ class ChatViewModel @Inject constructor(
                 bytes = attachment.bytes
             ).onSuccess { uploadedFile ->
                 val content = "[${uploadedFile.filename.replace("[","(").replace("]",")")}](${uploadedFile.url})"
-                chatRepository.sendMessage(type, to, content, topic)
+                val displayName = if (type.trim().lowercase() == "private") {
+                    val emails = to.split(',').map { it.trim().lowercase() }.toSet()
+                    _uiState.value.newDmPeople
+                        .filter { it.email.trim().lowercase() in emails }
+                        .joinToString(", ") { it.fullName }
+                } else ""
+                chatRepository.sendMessage(type, to, content, topic, displayName)
                     .onSuccess {
                         resyncOnResume()
                         onSuccess()
