@@ -14,8 +14,8 @@ android {
         applicationId = "com.mkras.zulip"
         minSdk = 28
         targetSdk = 35
-        versionCode = 10
-        versionName = "1.6.9"
+        versionCode = 11
+        versionName = "1.6.10"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

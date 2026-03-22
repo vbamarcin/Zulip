@@ -203,6 +203,7 @@ fun ChatScreen(
             scrollToMessageId = uiState.dmScrollToMessageId,
             conversationKey = selectedKey,
             typingText = uiState.typingText,
+            onMessagesRendered = onMessagesRendered,
             onBack = onBackToList,
             onScrollConsumed = onScrollConsumed,
             currentUserEmail = currentUserEmail,
@@ -553,6 +554,7 @@ private fun DmThreadView(
     scrollToMessageId: Long?,
     conversationKey: String,
     typingText: String?,
+    onMessagesRendered: (List<Long>) -> Unit,
     onBack: () -> Unit,
     onScrollConsumed: () -> Unit,
     currentUserEmail: String,
@@ -627,6 +629,12 @@ private fun DmThreadView(
         if (!autoScrolledToLatest && messages.isNotEmpty()) {
             listState.scrollToItem(messages.lastIndex)
             autoScrolledToLatest = true
+        }
+    }
+
+    LaunchedEffect(conversationKey, messages.size) {
+        if (messages.isNotEmpty()) {
+            onMessagesRendered(messages.takeLast(40).map { it.id })
         }
     }
 

@@ -79,6 +79,7 @@ import androidx.compose.ui.res.painterResource
 import com.mkras.zulip.core.security.StoredAuth
 import com.mkras.zulip.NotificationNavigationTarget
 import com.mkras.zulip.R
+import com.mkras.zulip.core.update.GitHubUpdateManager
 import com.mkras.zulip.core.update.OneDriveUpdateChecker
 import com.mkras.zulip.presentation.auth.rememberSharedImageAuthHeader
 import com.mkras.zulip.presentation.chat.ChatScreen
@@ -205,26 +206,43 @@ fun ZulipHomeScreen(
                 updateStatusText = "Sprawdzanie dostępności nowej wersji..."
             }
 
-            val checkResult = OneDriveUpdateChecker.findLatestVersion(ONEDRIVE_UPDATES_URL)
-            checkResult.onSuccess { latest ->
+            var detectedVersion: String? = null
+            var detectedFile: String? = null
+
+            val oneDriveResult = OneDriveUpdateChecker.findLatestVersion(ONEDRIVE_UPDATES_URL)
+            oneDriveResult.onSuccess { latest ->
                 if (latest != null && OneDriveUpdateChecker.isNewerVersion(latest.version, BuildConfig.VERSION_NAME)) {
-                    startupUpdateMessage = "Dostępna nowa wersja ${latest.version} (${latest.fileName}).\n\nAby zaktualizować:\n1. Otwórz folder aktualizacji\n2. Pobierz najnowszy APK\n3. Zainstaluj plik na urządzeniu"
-                    updateStatusText = "Wykryto nową wersję: ${latest.version}"
-                    if (manual) {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(ONEDRIVE_UPDATES_URL)).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        context.startActivity(intent)
+                    detectedVersion = latest.version
+                    detectedFile = latest.fileName
+                }
+            }
+
+            if (detectedVersion == null) {
+                val githubResult = GitHubUpdateManager.checkForUpdate(
+                    owner = UPDATE_REPO_OWNER,
+                    repo = UPDATE_REPO_NAME,
+                    currentVersionName = BuildConfig.VERSION_NAME,
+                    token = gitHubToken
+                )
+                githubResult.onSuccess { release ->
+                    if (release != null) {
+                        detectedVersion = release.tagName.removePrefix("v").removePrefix("V")
+                        detectedFile = release.apkName
                     }
-                } else {
-                    updateStatusText = if (manual) "Brak nowszej wersji" else null
                 }
-            }.onFailure { error ->
-                updateStatusText = if (manual) {
-                    error.message ?: "Nie udało się sprawdzić aktualizacji"
-                } else {
-                    null
+            }
+
+            if (detectedVersion != null) {
+                startupUpdateMessage = "Dostępna nowa wersja ${detectedVersion} (${detectedFile.orEmpty()}).\n\nAby zaktualizować:\n1. Otwórz folder aktualizacji\n2. Pobierz najnowszy APK\n3. Zainstaluj plik na urządzeniu"
+                updateStatusText = "Wykryto nową wersję: ${detectedVersion}"
+                if (manual) {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(ONEDRIVE_UPDATES_URL)).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(intent)
                 }
+            } else {
+                updateStatusText = if (manual) "Brak nowszej wersji" else null
             }
 
             isCheckingUpdate = false
@@ -296,6 +314,11 @@ fun ZulipHomeScreen(
                 )
             }
         }
+
+        if (target.messageId > 0L) {
+            chatViewModel.onMessagesRendered(listOf(target.messageId))
+        }
+
         onNotificationTargetConsumed()
     }
 
