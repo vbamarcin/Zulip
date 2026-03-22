@@ -14,6 +14,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.Base64
 
 private const val GITHUB_API_BASE = "https://api.github.com"
 
@@ -88,6 +89,62 @@ object GitHubUpdateManager {
                     tagName = tagName,
                     apkName = apkName,
                     apkUrl = apkUrl
+                )
+            }
+        }
+    }
+
+    suspend fun checkForUpdateFromReleaseNotes(
+        owner: String,
+        repo: String,
+        currentVersionName: String,
+        token: String
+    ): Result<GitHubReleaseInfo?> = withContext(Dispatchers.IO) {
+        runCatching {
+            val request = Request.Builder()
+                .url("$GITHUB_API_BASE/repos/$owner/$repo/contents/releases/RELEASES.md")
+                .addHeader("Authorization", "Bearer $token")
+                .addHeader("Accept", "application/vnd.github+json")
+                .addHeader("X-GitHub-Api-Version", "2022-11-28")
+                .build()
+
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return@use null
+                }
+
+                val body = response.body?.string().orEmpty()
+                if (body.isBlank()) {
+                    return@use null
+                }
+
+                val json = JSONObject(body)
+                val encoded = json.optString("content").orEmpty().replace("\n", "")
+                if (encoded.isBlank()) {
+                    return@use null
+                }
+
+                val decoded = runCatching {
+                    String(Base64.getDecoder().decode(encoded))
+                }.getOrElse { return@use null }
+
+                val firstMatch = Regex("""Toya-Zulip-v(\d+\.\d+\.\d+)\.apk""", RegexOption.IGNORE_CASE)
+                    .find(decoded)
+                    ?.groupValues
+                    ?.getOrNull(1)
+                    ?: return@use null
+
+                val latestVersion = normalizeVersion(firstMatch)
+                val currentVersion = normalizeVersion(currentVersionName)
+                if (!isVersionNewer(latestVersion, currentVersion)) {
+                    return@use null
+                }
+
+                val apkName = "Toya-Zulip-v$latestVersion.apk"
+                GitHubReleaseInfo(
+                    tagName = "v$latestVersion",
+                    apkName = apkName,
+                    apkUrl = "https://github.com/$owner/$repo/raw/main/releases/$apkName"
                 )
             }
         }

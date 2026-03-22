@@ -4,7 +4,18 @@ Tutaj dostępne są gotowe do instalacji wersje aplikacji Toya Zulip.
 
 ---
 
-## 📦 v1.6.10 (2026-03-22) — NAJNOWSZA
+## 📦 v1.6.11 (2026-03-22) — NAJNOWSZA
+
+**Plik:** `Toya-Zulip-v1.6.11.apk`  
+**Rozmiar:** 55.3 MB  
+
+### Zmiany w v1.6.11
+- ✅ Dodatkowy fallback wykrywania aktualizacji przez `releases/RELEASES.md`
+- ✅ Naprawa oznaczania odczytu po wejściu z powiadomienia: mechanizm pending-read po załadowaniu wiadomości
+
+---
+
+## 📦 v1.6.10 (2026-03-22)
 
 **Plik:** `Toya-Zulip-v1.6.10.apk`  
 **Rozmiar:** 55.3 MB  
@@ -175,7 +186,7 @@ Tutaj dostępne są gotowe do instalacji wersje aplikacji Toya Zulip.
 
 Przez ADB:
 ```bash
-adb install releases/Toya-Zulip-v1.6.10.apk
+adb install releases/Toya-Zulip-v1.6.11.apk
 ```
 
 ---
@@ -201,6 +212,7 @@ adb install releases/Toya-Zulip-v1.6.10.apk
 
 | Wersja | Data | APK | Opis |
 |--------|------|-----|------|
+| **1.6.11** | 2026-03-22 | ✅ | Dodatkowy fallback update + pending-read po powiadomieniu |
 | **1.6.10** | 2026-03-22 | ✅ | Fix update-check + read-state po wejściu z powiadomienia |
 | **1.6.9** | 2026-03-22 | ✅ | Wersja kompilacji na ekranie startowym |
 | **1.6.8** | 2026-03-22 | ✅ | Startup popup o nowej wersji + instrukcja aktualizacji |

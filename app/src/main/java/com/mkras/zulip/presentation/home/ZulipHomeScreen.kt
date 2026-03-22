@@ -172,6 +172,7 @@ fun ZulipHomeScreen(
     var updateStatusText by rememberSaveable { mutableStateOf<String?>(null) }
     var startupUpdateMessage by rememberSaveable { mutableStateOf<String?>(null) }
     var checkedUpdateThisSession by rememberSaveable { mutableStateOf(false) }
+    var pendingNotificationReadMessageId by rememberSaveable { mutableStateOf<Long?>(null) }
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val gitHubToken = BUILTIN_GITHUB_TOKEN
@@ -225,6 +226,21 @@ fun ZulipHomeScreen(
                     token = gitHubToken
                 )
                 githubResult.onSuccess { release ->
+                    if (release != null) {
+                        detectedVersion = release.tagName.removePrefix("v").removePrefix("V")
+                        detectedFile = release.apkName
+                    }
+                }
+            }
+
+            if (detectedVersion == null) {
+                val notesFallback = GitHubUpdateManager.checkForUpdateFromReleaseNotes(
+                    owner = UPDATE_REPO_OWNER,
+                    repo = UPDATE_REPO_NAME,
+                    currentVersionName = BuildConfig.VERSION_NAME,
+                    token = gitHubToken
+                )
+                notesFallback.onSuccess { release ->
                     if (release != null) {
                         detectedVersion = release.tagName.removePrefix("v").removePrefix("V")
                         detectedFile = release.apkName
@@ -316,10 +332,27 @@ fun ZulipHomeScreen(
         }
 
         if (target.messageId > 0L) {
+            pendingNotificationReadMessageId = target.messageId
             chatViewModel.onMessagesRendered(listOf(target.messageId))
         }
 
         onNotificationTargetConsumed()
+    }
+
+    LaunchedEffect(
+        pendingNotificationReadMessageId,
+        chatUiState.privateMessages.size,
+        chatUiState.allMessages.size,
+        channelsUiState.messages.size
+    ) {
+        val pendingId = pendingNotificationReadMessageId ?: return@LaunchedEffect
+        val isLoaded = chatUiState.privateMessages.any { it.id == pendingId } ||
+            chatUiState.allMessages.any { it.id == pendingId } ||
+            channelsUiState.messages.any { it.id == pendingId }
+        if (isLoaded) {
+            chatViewModel.onMessagesRendered(listOf(pendingId))
+            pendingNotificationReadMessageId = null
+        }
     }
 
     val baseTypography = MaterialTheme.typography
