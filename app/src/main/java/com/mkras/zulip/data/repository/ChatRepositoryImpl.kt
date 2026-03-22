@@ -39,6 +39,8 @@ class ChatRepositoryImpl @Inject constructor(
 
     override fun observePrivateMessages(): Flow<List<MessageEntity>> = messageDao.observePrivateMessages()
 
+    override fun observeStarredMessages(): Flow<List<MessageEntity>> = messageDao.observeStarredMessages()
+
     override fun observeDirectMessageCandidates(): Flow<List<DirectMessageCandidate>> {
         return directMessageCandidateDao.observeCandidates()
             .map { cached ->
@@ -107,6 +109,53 @@ class ChatRepositoryImpl @Inject constructor(
                 dmDisplayName = if (msgType == "private") buildDmDisplayName(recipients, selfEmail, dto.senderFullName.orEmpty()) else ""
             )
         }.filterNotNull()
+
+        messageDao.upsertAll(mapped)
+    }
+
+    override suspend fun resyncStarredMessages() {
+        val auth = secureSessionStorage.getAuth() ?: return
+        val service = zulipApiFactory.create(
+            serverUrl = auth.serverUrl,
+            credentials = BasicCredentials(auth.email, auth.apiKey)
+        )
+
+        val narrowJson = "[{\"operator\":\"is\",\"operand\":\"starred\"}]"
+        val response = service.getMessages(
+            anchor = "newest",
+            numBefore = 200,
+            numAfter = 0,
+            narrowJson = narrowJson,
+            applyMarkdown = false
+        )
+        if (response.result != "success") {
+            return
+        }
+
+        val selfEmail = auth.email
+        val serverUrl = auth.serverUrl
+        val mapped = response.messages.map { dto ->
+            val msgType = dto.type.orEmpty()
+            val recipients = if (msgType == "private") parsePrivateRecipients(dto.displayRecipient) else emptyList()
+            MessageEntity(
+                id = dto.id,
+                senderFullName = dto.senderFullName.orEmpty().ifBlank { dto.senderEmail.orEmpty() },
+                senderEmail = dto.senderEmail.orEmpty(),
+                content = dto.content.orEmpty(),
+                topic = dto.subject.orEmpty(),
+                streamName = if (msgType == "stream") dto.displayRecipient?.toString().orEmpty().trim() else null,
+                timestampSeconds = dto.timestamp,
+                isRead = dto.flags?.contains("read") == true,
+                isStarred = dto.flags?.contains("starred") == true,
+                isMentioned = dto.flags?.contains("mentioned") == true,
+                isWildcardMentioned = dto.flags?.contains("wildcard_mentioned") == true,
+                reactionSummary = null,
+                avatarUrl = resolveAvatarUrl(dto.avatarUrl.orEmpty(), serverUrl),
+                messageType = msgType,
+                conversationKey = if (msgType == "private") buildConversationKey(recipients, dto.senderEmail.orEmpty()) else "",
+                dmDisplayName = if (msgType == "private") buildDmDisplayName(recipients, selfEmail, dto.senderFullName.orEmpty()) else ""
+            )
+        }
 
         messageDao.upsertAll(mapped)
     }

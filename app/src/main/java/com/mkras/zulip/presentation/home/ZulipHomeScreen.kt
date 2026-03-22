@@ -210,11 +210,18 @@ fun ZulipHomeScreen(
             var detectedVersion: String? = null
             var detectedFile: String? = null
 
-            val oneDriveResult = OneDriveUpdateChecker.findLatestVersion(ONEDRIVE_UPDATES_URL)
-            oneDriveResult.onSuccess { latest ->
-                if (latest != null && OneDriveUpdateChecker.isNewerVersion(latest.version, BuildConfig.VERSION_NAME)) {
-                    detectedVersion = latest.version
-                    detectedFile = latest.fileName
+            if (detectedVersion == null) {
+                val notesFallback = GitHubUpdateManager.checkForUpdateFromReleaseNotes(
+                    owner = UPDATE_REPO_OWNER,
+                    repo = UPDATE_REPO_NAME,
+                    currentVersionName = BuildConfig.VERSION_NAME,
+                    token = gitHubToken
+                )
+                notesFallback.onSuccess { release ->
+                    if (release != null) {
+                        detectedVersion = release.tagName.removePrefix("v").removePrefix("V")
+                        detectedFile = release.apkName
+                    }
                 }
             }
 
@@ -234,16 +241,11 @@ fun ZulipHomeScreen(
             }
 
             if (detectedVersion == null) {
-                val notesFallback = GitHubUpdateManager.checkForUpdateFromReleaseNotes(
-                    owner = UPDATE_REPO_OWNER,
-                    repo = UPDATE_REPO_NAME,
-                    currentVersionName = BuildConfig.VERSION_NAME,
-                    token = gitHubToken
-                )
-                notesFallback.onSuccess { release ->
-                    if (release != null) {
-                        detectedVersion = release.tagName.removePrefix("v").removePrefix("V")
-                        detectedFile = release.apkName
+                val oneDriveResult = OneDriveUpdateChecker.findLatestVersion(ONEDRIVE_UPDATES_URL)
+                oneDriveResult.onSuccess { latest ->
+                    if (latest != null && OneDriveUpdateChecker.isNewerVersion(latest.version, BuildConfig.VERSION_NAME)) {
+                        detectedVersion = latest.version
+                        detectedFile = latest.fileName
                     }
                 }
             }

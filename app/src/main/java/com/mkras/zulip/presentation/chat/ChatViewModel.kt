@@ -44,6 +44,7 @@ class ChatViewModel @Inject constructor(
         observeMentionCandidates()
         observeMessages()
         observeAllMessages()
+        observeStarredMessages()
         observeTypingEvents()
         observePresenceEvents()
         ensureMentionCandidatesLoaded()
@@ -83,6 +84,7 @@ class ChatViewModel @Inject constructor(
         loadModerationPermission()
         viewModelScope.launch {
             chatRepository.resyncLatestMessages()
+            chatRepository.resyncStarredMessages()
         }
     }
 
@@ -291,9 +293,18 @@ class ChatViewModel @Inject constructor(
             chatRepository.observeMessages().collect { messages ->
                 _uiState.update {
                     it.copy(
-                        allMessages = messages.sortedByDescending { m -> m.timestampSeconds },
-                        starredMessages = messages.filter { m -> m.isStarred }.sortedByDescending { m -> m.timestampSeconds }
+                        allMessages = messages.sortedByDescending { m -> m.timestampSeconds }
                     )
+                }
+            }
+        }
+    }
+
+    private fun observeStarredMessages() {
+        viewModelScope.launch {
+            chatRepository.observeStarredMessages().collect { messages ->
+                _uiState.update {
+                    it.copy(starredMessages = messages.sortedByDescending { m -> m.timestampSeconds })
                 }
             }
         }

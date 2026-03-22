@@ -6,9 +6,11 @@ import kotlinx.coroutines.flow.Flow
 interface ChatRepository {
     fun observeMessages(): Flow<List<MessageEntity>>
     fun observePrivateMessages(): Flow<List<MessageEntity>>
+    fun observeStarredMessages(): Flow<List<MessageEntity>>
     fun observeMessages(streamName: String, topicName: String): Flow<List<MessageEntity>>
     fun observeDirectMessageCandidates(): Flow<List<DirectMessageCandidate>>
     suspend fun resyncLatestMessages()
+    suspend fun resyncStarredMessages()
     suspend fun resyncNarrow(streamName: String, topicName: String)
     suspend fun fetchNarrowMessagesOnline(streamName: String, topicName: String): Result<List<MessageEntity>>
     suspend fun loadOlderNarrowMessages(
