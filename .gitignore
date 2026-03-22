@@ -6,6 +6,7 @@ build/
 # Android Studio
 .idea/
 *.iml
+*.apk
 *.ap_
 *.dex
 *.class
@@ -87,3 +88,4 @@ gradlew
 # Allow APK in releases folder
 !releases/
 !releases/*.apk
+
