@@ -145,10 +145,18 @@ class ChatViewModel @Inject constructor(
     }
 
     fun startDirectMessage(candidate: DirectMessageCandidate) {
+        val targetEmail = candidate.email.trim().lowercase()
+        val existingConversation = uiState.value.dmConversations.firstOrNull { conversation ->
+            conversation.conversationKey
+                .split(',')
+                .map { it.trim().lowercase() }
+                .any { it == targetEmail }
+        }
+
         _uiState.update {
             it.copy(
-                selectedConversationKey = candidate.email,
-                selectedConversationTitle = candidate.fullName,
+                selectedConversationKey = existingConversation?.conversationKey ?: targetEmail,
+                selectedConversationTitle = existingConversation?.displayName ?: candidate.fullName,
                 isNewDmPickerVisible = false,
                 newDmQuery = "",
                 newDmError = null
@@ -252,7 +260,12 @@ class ChatViewModel @Inject constructor(
     private fun observeMessages() {
         viewModelScope.launch {
             chatRepository.observePrivateMessages().collect { messages ->
-                val conversations = messages
+                val normalizedMessages = messages.map { message ->
+                    val normalizedKey = normalizeDmConversationKey(message.conversationKey, message.senderEmail)
+                    if (normalizedKey == message.conversationKey) message else message.copy(conversationKey = normalizedKey)
+                }
+
+                val conversations = normalizedMessages
                     .groupBy { it.conversationKey }
                     .map { (key, msgs) ->
                         val latest = msgs.maxByOrNull { it.timestampSeconds }
@@ -276,10 +289,26 @@ class ChatViewModel @Inject constructor(
                     }
                     .sortedByDescending { it.latestTimestamp }
                 _uiState.update {
-                    it.copy(privateMessages = messages, dmConversations = conversations)
+                    it.copy(privateMessages = normalizedMessages, dmConversations = conversations)
                 }
             }
         }
+    }
+
+    private fun normalizeDmConversationKey(rawKey: String, fallbackEmail: String): String {
+        val participants = rawKey
+            .split(',')
+            .map { it.trim().lowercase() }
+            .filter { it.isNotBlank() }
+            .ifEmpty {
+                listOf(fallbackEmail.trim().lowercase()).filter { it.isNotBlank() }
+            }
+
+        val withoutSelf = participants.filterNot { it == currentUserEmail.trim().lowercase() }
+        return (if (withoutSelf.isNotEmpty()) withoutSelf else participants)
+            .distinct()
+            .sorted()
+            .joinToString(",")
     }
 
     private fun observeMentionCandidates() {

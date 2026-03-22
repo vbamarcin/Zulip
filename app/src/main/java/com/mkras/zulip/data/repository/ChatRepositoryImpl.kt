@@ -110,7 +110,7 @@ class ChatRepositoryImpl @Inject constructor(
                 reactionSummary = null,
                 avatarUrl = resolveAvatarUrl(dto.avatarUrl.orEmpty(), serverUrl),
                 messageType = msgType,
-                conversationKey = if (msgType == "private") buildConversationKey(recipients, dto.senderEmail.orEmpty()) else "",
+                conversationKey = if (msgType == "private") buildConversationKey(recipients, dto.senderEmail.orEmpty(), selfEmail) else "",
                 dmDisplayName = if (msgType == "private") buildDmDisplayName(recipients, selfEmail, dto.senderFullName.orEmpty()) else ""
             )
         }.filterNotNull()
@@ -157,7 +157,7 @@ class ChatRepositoryImpl @Inject constructor(
                 reactionSummary = null,
                 avatarUrl = resolveAvatarUrl(dto.avatarUrl.orEmpty(), serverUrl),
                 messageType = msgType,
-                conversationKey = if (msgType == "private") buildConversationKey(recipients, dto.senderEmail.orEmpty()) else "",
+                conversationKey = if (msgType == "private") buildConversationKey(recipients, dto.senderEmail.orEmpty(), selfEmail) else "",
                 dmDisplayName = if (msgType == "private") buildDmDisplayName(recipients, selfEmail, dto.senderFullName.orEmpty()) else ""
             )
         }
@@ -352,9 +352,40 @@ class ChatRepositoryImpl @Inject constructor(
             .orEmpty()
     }
 
-    private fun buildConversationKey(recipients: List<Map<*, *>>, fallbackEmail: String): String {
-        val emails = recipients.mapNotNull { it["email"] as? String }
-        return if (emails.isEmpty()) fallbackEmail else emails.sorted().joinToString(",")
+    private fun buildConversationKey(recipients: List<Map<*, *>>, fallbackEmail: String, selfEmail: String): String {
+        val recipientEmails = recipients
+            .mapNotNull { it["email"] as? String }
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+
+        val participants = if (recipientEmails.isEmpty()) {
+            listOf(fallbackEmail)
+        } else {
+            recipientEmails
+        }
+
+        val withoutSelf = participants.filterNot { it.equals(selfEmail, ignoreCase = true) }
+        val normalized = (if (withoutSelf.isNotEmpty()) withoutSelf else participants)
+            .map { it.lowercase() }
+            .distinct()
+            .sorted()
+
+        return normalized.joinToString(",")
+    }
+
+    private fun normalizePrivateConversationKey(rawTo: String, selfEmail: String): String {
+        val participants = rawTo
+            .split(',')
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+
+        val withoutSelf = participants.filterNot { it.equals(selfEmail, ignoreCase = true) }
+        val normalized = (if (withoutSelf.isNotEmpty()) withoutSelf else participants)
+            .map { it.lowercase() }
+            .distinct()
+            .sorted()
+
+        return normalized.joinToString(",").ifBlank { rawTo.trim().lowercase() }
     }
 
     private fun buildDmDisplayName(recipients: List<Map<*, *>>, selfEmail: String, fallback: String): String {
@@ -452,7 +483,7 @@ class ChatRepositoryImpl @Inject constructor(
                         reactionSummary = null,
                         avatarUrl = "",
                         messageType = normalizedType,
-                        conversationKey = if (normalizedType == "private") to else "",
+                        conversationKey = if (normalizedType == "private") normalizePrivateConversationKey(to, auth.email) else "",
                         dmDisplayName = if (normalizedType == "private") to else ""
                     )
                 )
