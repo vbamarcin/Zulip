@@ -708,7 +708,7 @@ private fun SettingsPanel(
                 }
                 Spacer(modifier = Modifier.height(2.dp))
                 SettingsToggleRow(label = "Markdown w kanałach", checked = markdownEnabled, onCheckedChange = onMarkdownEnabledChanged)
-                SettingsToggleRow(label = "Blokada biometryczna", checked = biometricLockEnabled, onCheckedChange = onBiometricLockChanged)
+                SettingsToggleRow(label = "Blokada biometryczna / PIN", checked = biometricLockEnabled, onCheckedChange = onBiometricLockChanged)
                 SettingsToggleRow(label = "Powiadomienia lokalne (global)", checked = notificationsEnabled, onCheckedChange = onNotificationsEnabledChanged)
                 SettingsToggleRow(label = "Powiadomienia DM", checked = dmNotificationsEnabled, onCheckedChange = onDmNotificationsEnabledChanged)
                 SettingsToggleRow(label = "Powiadomienia kanałów", checked = channelNotificationsEnabled, onCheckedChange = onChannelNotificationsEnabledChanged)

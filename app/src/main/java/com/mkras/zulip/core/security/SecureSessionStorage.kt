@@ -212,7 +212,7 @@ class SecureSessionStorage @Inject constructor(
     }
 
     fun getBiometricLockEnabled(): Boolean {
-        return prefs.getBoolean(KEY_BIOMETRIC_LOCK, false)
+        return prefs.getBoolean(KEY_BIOMETRIC_LOCK, true)
     }
 
     private fun normalizeDirectMessageKey(conversationKey: String): String? {
