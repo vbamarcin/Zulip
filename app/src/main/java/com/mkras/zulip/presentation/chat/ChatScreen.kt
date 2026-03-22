@@ -1069,20 +1069,33 @@ private fun ImageFullscreenDialog(
 }
 
 private fun firstImageUrl(rawContent: String, serverUrl: String): String? {
-    // Basic search for common patterns
     val candidates = mutableListOf<String>()
-    
-    // Simple extraction for speed
-    if (rawContent.contains("src=\"")) {
-        rawContent.split("src=\"").drop(1).forEach { candidates.add(it.substringBefore("\"")) }
-    }
-    if (rawContent.contains("src='")) {
-        rawContent.split("src='").drop(1).forEach { candidates.add(it.substringBefore("'")) }
-    }
-    if (rawContent.contains("![")) {
-        MD_IMAGE_REGEX.findAll(rawContent).forEach { candidates.add(it.groupValues[1]) }
-    }
-    
+
+    Regex("src\\s*=\\s*\"([^\"]+)\"", RegexOption.IGNORE_CASE)
+        .findAll(rawContent)
+        .forEach { candidates += it.groupValues[1] }
+    Regex("src\\s*=\\s*'([^']+)'", RegexOption.IGNORE_CASE)
+        .findAll(rawContent)
+        .forEach { candidates += it.groupValues[1] }
+    Regex("href\\s*=\\s*\"([^\"]+)\"", RegexOption.IGNORE_CASE)
+        .findAll(rawContent)
+        .forEach { candidates += it.groupValues[1] }
+    Regex("href\\s*=\\s*'([^']+)'", RegexOption.IGNORE_CASE)
+        .findAll(rawContent)
+        .forEach { candidates += it.groupValues[1] }
+    MD_IMAGE_REGEX
+        .findAll(rawContent)
+        .forEach { candidates += it.groupValues[1] }
+    Regex("\\[([^\\]]*?)]\\(([^)]+)\\)")
+        .findAll(rawContent)
+        .forEach { candidates += it.groupValues[2] }
+    Regex("https?://[^\\s\"'<>()]+", RegexOption.IGNORE_CASE)
+        .findAll(rawContent)
+        .forEach { candidates += it.value }
+    Regex("/user_uploads/[^\\s\"'<>()]*", RegexOption.IGNORE_CASE)
+        .findAll(rawContent)
+        .forEach { candidates += it.value }
+
     val imagePath = candidates.firstOrNull {
         it.contains(IMAGE_EXT_REGEX) || it.contains("/user_uploads/", ignoreCase = true)
     } ?: return null
