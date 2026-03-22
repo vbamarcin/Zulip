@@ -207,6 +207,14 @@ class SecureSessionStorage @Inject constructor(
         return prefs.getLong(KEY_MENTION_CANDIDATES_LAST_SYNC, 0L)
     }
 
+    fun saveBiometricLockEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_BIOMETRIC_LOCK, enabled).apply()
+    }
+
+    fun getBiometricLockEnabled(): Boolean {
+        return prefs.getBoolean(KEY_BIOMETRIC_LOCK, false)
+    }
+
     private fun normalizeDirectMessageKey(conversationKey: String): String? {
         val selfEmail = getAuth()?.email?.trim()?.lowercase().orEmpty()
         val normalizedParts = conversationKey
@@ -238,6 +246,7 @@ class SecureSessionStorage @Inject constructor(
         private const val KEY_DISABLED_CHANNELS = "disabled_channels"
         private const val KEY_MUTED_DIRECT_MESSAGES = "muted_direct_messages"
         private const val KEY_MENTION_CANDIDATES_LAST_SYNC = "mention_candidates_last_sync"
+        private const val KEY_BIOMETRIC_LOCK = "biometric_lock"
         // Draft keys are dynamic: "draft_$conversationKey"
     }
 }

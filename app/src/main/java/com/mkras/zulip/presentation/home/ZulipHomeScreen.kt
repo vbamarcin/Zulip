@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AllInbox
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.Forum
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.automirrored.rounded.ManageSearch
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Button
@@ -88,6 +89,7 @@ private val HOME_TABS = listOf(
     RootTab("Kanały", Icons.Rounded.Forum),
     RootTab("Wszystkie", Icons.Rounded.AllInbox),
     RootTab("Szukaj", Icons.AutoMirrored.Rounded.ManageSearch),
+    RootTab("★ Gwiazdki", Icons.Rounded.Star),
     RootTab("Ustawienia", Icons.Rounded.Settings)
 )
 private val TabBarBg      = Color(0xCC0B1728)
@@ -133,6 +135,8 @@ fun ZulipHomeScreen(
     getDisabledChannels: () -> Set<String> = { emptySet() },
     notificationTarget: NotificationNavigationTarget? = null,
     onNotificationTargetConsumed: () -> Unit = {},
+    initialBiometricLockEnabled: Boolean = false,
+    onSaveBiometricLockEnabled: (Boolean) -> Unit = {},
     chatViewModel: ChatViewModel = hiltViewModel(),
     channelsViewModel: ChannelsViewModel = hiltViewModel()
 ) {
@@ -144,6 +148,7 @@ fun ZulipHomeScreen(
     var notificationsEnabled by rememberSaveable { mutableStateOf(initialNotificationsEnabled) }
     var dmNotificationsEnabled by rememberSaveable { mutableStateOf(initialDmNotificationsEnabled) }
     var channelNotificationsEnabled by rememberSaveable { mutableStateOf(initialChannelNotificationsEnabled) }
+    var biometricLockEnabled by rememberSaveable { mutableStateOf(initialBiometricLockEnabled) }
     val context = LocalContext.current
 
     val hasNotificationPermission = remember(context) {
@@ -480,6 +485,24 @@ fun ZulipHomeScreen(
                             onQueryChange = chatViewModel::updateSearchQuery,
                             onSearch = chatViewModel::submitSearch
                         )
+                        4 -> AllMessagesScreen(
+                            messages = chatUiState.starredMessages,
+                            compactMode = compactMode,
+                            serverUrl = session.serverUrl,
+                            imageAuthHeader = imageAuthHeader,
+                            onMessageClick = { message ->
+                                if (message.messageType == "private") {
+                                    selectedTab = 0
+                                    chatViewModel.openConversationFromMessage(message)
+                                } else {
+                                    val streamName = message.streamName
+                                    if (streamName != null && message.topic.isNotBlank()) {
+                                        selectedTab = 1
+                                        channelsViewModel.openFromAllMessages(streamName, message.topic, message.id)
+                                    }
+                                }
+                            }
+                        )
                         else -> SettingsPanel(
                             session = session,
                             onLogout = onLogout,
@@ -540,7 +563,12 @@ fun ZulipHomeScreen(
                             onSetChannelMuted = onSetChannelMuted,
                             getMutedChannels = getMutedChannels,
                             onSetChannelDisabled = onSetChannelDisabled,
-                            getDisabledChannels = getDisabledChannels
+                            getDisabledChannels = getDisabledChannels,
+                            biometricLockEnabled = biometricLockEnabled,
+                            onBiometricLockChanged = { enabled ->
+                                biometricLockEnabled = enabled
+                                onSaveBiometricLockEnabled(enabled)
+                            }
                         )
                     }
                 }
@@ -632,7 +660,9 @@ private fun SettingsPanel(
     onSetChannelMuted: (String, Boolean) -> Unit,
     getMutedChannels: () -> Set<String>,
     onSetChannelDisabled: (String, Boolean) -> Unit,
-    getDisabledChannels: () -> Set<String>
+    getDisabledChannels: () -> Set<String>,
+    biometricLockEnabled: Boolean = false,
+    onBiometricLockChanged: (Boolean) -> Unit = {}
 ) {
     var mutedChannels by remember {
         mutableStateOf(getMutedChannels().toList().sorted())
@@ -677,6 +707,7 @@ private fun SettingsPanel(
                 }
                 Spacer(modifier = Modifier.height(2.dp))
                 SettingsToggleRow(label = "Markdown w kanałach", checked = markdownEnabled, onCheckedChange = onMarkdownEnabledChanged)
+                SettingsToggleRow(label = "Blokada biometryczna", checked = biometricLockEnabled, onCheckedChange = onBiometricLockChanged)
                 SettingsToggleRow(label = "Powiadomienia lokalne (global)", checked = notificationsEnabled, onCheckedChange = onNotificationsEnabledChanged)
                 SettingsToggleRow(label = "Powiadomienia DM", checked = dmNotificationsEnabled, onCheckedChange = onDmNotificationsEnabledChanged)
                 SettingsToggleRow(label = "Powiadomienia kanałów", checked = channelNotificationsEnabled, onCheckedChange = onChannelNotificationsEnabledChanged)

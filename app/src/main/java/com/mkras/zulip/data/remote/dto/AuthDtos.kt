@@ -36,6 +36,7 @@ data class EventDto(
     @Json(name = "sender_email") val senderEmail: String? = null,
     @Json(name = "emoji_name") val emojiName: String? = null,
     @Json(name = "status") val presenceStatus: String? = null,
+    @Json(name = "email") val email: String? = null,
     @Json(name = "content") val content: String? = null,
     @Json(name = "subject") val subject: String? = null,
     @Json(name = "stream_id") val streamId: Long? = null,

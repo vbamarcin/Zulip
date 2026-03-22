@@ -13,6 +13,9 @@ interface MessageDao {
     @Query("SELECT * FROM messages ORDER BY id ASC")
     fun observeMessages(): Flow<List<MessageEntity>>
 
+    @Query("SELECT * FROM messages WHERE isStarred = 1 ORDER BY timestampSeconds DESC")
+    fun observeStarredMessages(): Flow<List<MessageEntity>>
+
     @Query("SELECT * FROM messages WHERE messageType = 'private' ORDER BY timestampSeconds ASC")
     fun observePrivateMessages(): Flow<List<MessageEntity>>
 

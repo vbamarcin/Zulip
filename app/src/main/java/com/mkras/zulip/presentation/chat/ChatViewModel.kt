@@ -3,6 +3,7 @@ package com.mkras.zulip.presentation.chat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mkras.zulip.core.realtime.EventProcessor
+import com.mkras.zulip.core.realtime.PresenceEvent
 import com.mkras.zulip.core.realtime.TypingEvent
 import com.mkras.zulip.core.security.SecureSessionStorage
 import com.mkras.zulip.data.local.entity.MessageEntity
@@ -44,6 +45,7 @@ class ChatViewModel @Inject constructor(
         observeMessages()
         observeAllMessages()
         observeTypingEvents()
+        observePresenceEvents()
         ensureMentionCandidatesLoaded()
         loadModerationPermission()
         resyncOnResume()
@@ -288,7 +290,30 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             chatRepository.observeMessages().collect { messages ->
                 _uiState.update {
-                    it.copy(allMessages = messages.sortedByDescending { m -> m.timestampSeconds })
+                    it.copy(
+                        allMessages = messages.sortedByDescending { m -> m.timestampSeconds },
+                        starredMessages = messages.filter { m -> m.isStarred }.sortedByDescending { m -> m.timestampSeconds }
+                    )
+                }
+            }
+        }
+    }
+
+    private fun observePresenceEvents() {
+        viewModelScope.launch {
+            eventProcessor.presenceEvents.collect { event ->
+                val email = event.email
+                if (!email.isNullOrBlank()) {
+                    _uiState.update { state ->
+                        val updated = state.presenceByEmail.toMutableMap()
+                        val status = event.status
+                        if (status.isNullOrBlank() || status == "offline") {
+                            updated.remove(email)
+                        } else {
+                            updated[email] = status
+                        }
+                        state.copy(presenceByEmail = updated)
+                    }
                 }
             }
         }
@@ -591,5 +616,7 @@ data class ChatUiState(
     val newDmError: String? = null,
     val pendingDirectMessageContent: String? = null,
     val dmScrollToMessageId: Long? = null,
-    val canModerateAllMessages: Boolean = false
+    val canModerateAllMessages: Boolean = false,
+    val presenceByEmail: Map<String, String> = emptyMap(),
+    val starredMessages: List<MessageEntity> = emptyList()
 )

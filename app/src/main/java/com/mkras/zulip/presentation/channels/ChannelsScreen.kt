@@ -82,6 +82,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.NotificationsOff
+import androidx.compose.material.icons.rounded.DoNotDisturb
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import java.text.DateFormat
@@ -355,7 +356,7 @@ private fun StreamsList(
                                     Text(unreadCount.toString(), color = Color.White, style = MaterialTheme.typography.labelSmall)
                                 }
                             }
-                            OutlinedButton(
+                            IconButton(
                                 onClick = {
                                     onSetChannelDisabled(stream.name, true)
                                     coroutineScope.launch {
@@ -370,9 +371,14 @@ private fun StreamsList(
                                         }
                                     }
                                 },
-                                modifier = Modifier.padding(start = 8.dp)
+                                modifier = Modifier.size(28.dp)
                             ) {
-                                Text("Wyłącz")
+                                Icon(
+                                    imageVector = Icons.Rounded.DoNotDisturb,
+                                    contentDescription = "Wyłącz kanał",
+                                    tint = Color(0xFF4A5568),
+                                    modifier = Modifier.size(16.dp)
+                                )
                             }
                         }
                         if (markdownEnabled) {

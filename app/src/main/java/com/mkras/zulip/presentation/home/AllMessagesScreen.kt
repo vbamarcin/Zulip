@@ -15,6 +15,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.CircularProgressIndicator
@@ -70,7 +78,7 @@ fun AllMessagesScreen(
     imageAuthHeader: String? = null,
     onMessageClick: (MessageEntity) -> Unit = {}
 ) {
-    val orderedMessages = remember(messages) { messages.sortedBy { it.timestampSeconds } }
+    val orderedMessages = remember(messages) { messages.sortedByDescending { it.timestampSeconds } }
     val gap        = if (compactMode) 6.dp else 8.dp
     val cardPadding = if (compactMode) 10.dp else 14.dp
     val metaStyle  = MaterialTheme.typography.labelSmall
@@ -85,8 +93,15 @@ fun AllMessagesScreen(
         return
     }
 
+    val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+    val showFab by remember { derivedStateOf { listState.firstVisibleItemIndex > 3 } }
+
+    Box(modifier = Modifier.fillMaxSize()) {
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
+        reverseLayout = true,
         verticalArrangement = Arrangement.spacedBy(gap)
     ) {
         items(orderedMessages, key = { it.id }) { message ->
@@ -191,6 +206,19 @@ fun AllMessagesScreen(
                     }
         }
     }
+    if (showFab) {
+        FloatingActionButton(
+            onClick = { coroutineScope.launch { listState.animateScrollToItem(0) } },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(12.dp),
+            containerColor = Color(0xFF2B5A83),
+            contentColor = Accent
+        ) {
+            Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Skocz do najnowszych")
+        }
+    }
+    } // outer Box
 }
 
 @Composable

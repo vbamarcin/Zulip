@@ -6,6 +6,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -29,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.NotificationsOff
 import androidx.compose.material.icons.rounded.Search
@@ -50,6 +52,7 @@ import android.widget.TextView
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -174,7 +177,9 @@ fun ChatScreen(
             newDmPeople = uiState.newDmPeople,
             onCloseNewDmPicker = onCloseNewDmPicker,
             onNewDmQueryChange = onNewDmQueryChange,
-            onSelectNewDmPerson = onSelectNewDmPerson
+            onSelectNewDmPerson = onSelectNewDmPerson,
+            presenceByEmail = uiState.presenceByEmail,
+            currentUserEmail = currentUserEmail
         )
     } else {
         val thread = remember(uiState.privateMessages, selectedKey) {
@@ -224,7 +229,9 @@ private fun DmConversationList(
     newDmPeople: List<DirectMessageCandidate>,
     onCloseNewDmPicker: () -> Unit,
     onNewDmQueryChange: (String) -> Unit,
-    onSelectNewDmPerson: (DirectMessageCandidate) -> Unit
+    onSelectNewDmPerson: (DirectMessageCandidate) -> Unit,
+    presenceByEmail: Map<String, String> = emptyMap(),
+    currentUserEmail: String = ""
 ) {
     val gap = if (compactMode) 2.dp else 3.dp
     val cardVertical = if (compactMode) 8.dp else 12.dp
@@ -262,6 +269,14 @@ private fun DmConversationList(
                 verticalArrangement = Arrangement.spacedBy(gap)
             ) {
                 items(conversations, key = { it.conversationKey }) { conv ->
+                    val peerEmail = remember(conv.conversationKey, currentUserEmail) {
+                        val selfNorm = currentUserEmail.trim().lowercase()
+                        conv.conversationKey.split(",")
+                            .map { it.trim().lowercase() }
+                            .filter { it.isNotBlank() && it != selfNorm }
+                            .firstOrNull() ?: conv.conversationKey.trim().lowercase()
+                    }
+                    val presenceStatus = presenceByEmail[peerEmail]
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -274,11 +289,26 @@ private fun DmConversationList(
                             modifier = Modifier.padding(horizontal = cardHorizontal, vertical = cardVertical),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            AvatarImage(
-                                avatarUrl = conv.avatarUrl,
-                                initials = conv.displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-                                size = avatarSize
-                            )
+                            Box(contentAlignment = Alignment.BottomEnd) {
+                                AvatarImage(
+                                    avatarUrl = conv.avatarUrl,
+                                    initials = conv.displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                                    size = avatarSize
+                                )
+                                if (presenceStatus != null) {
+                                    val dotColor = when (presenceStatus) {
+                                        "active" -> Color(0xFF43D87A)
+                                        "idle"   -> Color(0xFFF5C543)
+                                        else     -> Color(0xFF6B7280)
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .size(9.dp)
+                                            .background(dotColor, CircleShape)
+                                            .border(1.5.dp, CardBg, CircleShape)
+                                    )
+                                }
+                            }
                             Column(
                                 modifier = Modifier
                                     .weight(1f)
@@ -516,6 +546,13 @@ private fun DmThreadView(
     val listState = rememberLazyListState()
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val showJumpToLatestFab by remember {
+        derivedStateOf {
+            messages.isNotEmpty() &&
+                listState.layoutInfo.totalItemsCount > 0 &&
+                listState.firstVisibleItemIndex < messages.size - 5
+        }
+    }
     var autoScrolledToLatest by remember(conversationKey) { mutableStateOf(false) }
     var highlightedMessageId by remember(conversationKey) { mutableStateOf<Long?>(null) }
     var isUploadingAttachment by remember { mutableStateOf(false) }
@@ -598,9 +635,10 @@ private fun DmThreadView(
                 }
             }
         }
+        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxWidth().weight(1f),
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(top = rowBottom, bottom = 8.dp),
             verticalArrangement = Arrangement.spacedBy(gap)
         ) {
@@ -662,6 +700,19 @@ private fun DmThreadView(
                 }
             }
         }
+        if (showJumpToLatestFab) {
+            FloatingActionButton(
+                onClick = { coroutineScope.launch { listState.animateScrollToItem(messages.lastIndex) } },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(8.dp),
+                containerColor = Color(0xFF2B5A83),
+                contentColor = Color(0xFF8CD9FF)
+            ) {
+                Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Skocz do najnowszych")
+            }
+        }
+        } // close Box
         if (typingText != null) {
             Text(text = typingText, color = Color(0xFF8CD9FF), modifier = Modifier.padding(start = 8.dp, top = 4.dp, bottom = 8.dp))
         }

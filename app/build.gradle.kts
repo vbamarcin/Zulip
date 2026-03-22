@@ -14,8 +14,8 @@ android {
         applicationId = "com.mkras.zulip"
         minSdk = 28
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.5.1"
+        versionCode = 3
+        versionName = "1.6.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -104,6 +104,8 @@ dependencies {
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
 
     implementation("androidx.security:security-crypto-ktx:1.1.0-alpha06")
+    implementation("androidx.biometric:biometric:1.1.0")
+    implementation("androidx.appcompat:appcompat:1.7.0")
 
     implementation("io.noties.markwon:core:4.6.2")
     implementation("io.noties.markwon:html:4.6.2")

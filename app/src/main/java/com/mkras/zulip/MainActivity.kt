@@ -1,8 +1,8 @@
 package com.mkras.zulip
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -18,7 +18,7 @@ import com.mkras.zulip.presentation.navigation.ZulipRoot
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
     private var notificationTarget by mutableStateOf<NotificationNavigationTarget?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {

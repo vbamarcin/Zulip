@@ -59,6 +59,7 @@ class EventProcessor @Inject constructor(
                 _presenceEvents.emit(
                     PresenceEvent(
                         userId = event.userId,
+                        email = event.email ?: event.senderEmail,
                         status = event.presenceStatus
                     )
                 )
@@ -240,5 +241,6 @@ data class TypingEvent(
 
 data class PresenceEvent(
     val userId: Long?,
+    val email: String?,
     val status: String?
 )

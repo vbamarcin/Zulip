@@ -191,6 +191,10 @@ class AuthViewModel @Inject constructor(
     fun setDirectMessageMuted(conversationKey: String, muted: Boolean) {
         secureSessionStorage.setDirectMessageMuted(conversationKey, muted)
     }
+
+    fun getBiometricLockEnabled(): Boolean = secureSessionStorage.getBiometricLockEnabled()
+
+    fun saveBiometricLockEnabled(enabled: Boolean) = secureSessionStorage.saveBiometricLockEnabled(enabled)
 }
 
 data class AuthUiState(

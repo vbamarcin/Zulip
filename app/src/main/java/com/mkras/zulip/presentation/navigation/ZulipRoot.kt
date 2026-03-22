@@ -1,5 +1,8 @@
 package com.mkras.zulip.presentation.navigation
 
+import androidx.appcompat.app.AppCompatActivity
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -9,14 +12,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.Image
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -29,6 +37,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mkras.zulip.core.realtime.EventServiceController
@@ -70,6 +79,8 @@ fun ZulipRoot(
     }
 
     val session = uiState.currentSession
+    var biometricAuthenticated by remember { mutableStateOf(false) }
+
     DisposableEffect(session?.serverUrl, session?.email) {
         if (session != null) {
             EventServiceController.start(context)
@@ -94,6 +105,13 @@ fun ZulipRoot(
             onSubmit = viewModel::submit
         )
     } else {
+        val biometricEnabled = viewModel.getBiometricLockEnabled()
+        if (biometricEnabled && !biometricAuthenticated) {
+            BiometricLockScreen(
+                onAuthenticated = { biometricAuthenticated = true },
+                onLogout = viewModel::logout
+            )
+        } else {
         ZulipHomeScreen(
             session = session,
             onLogout = viewModel::logout,
@@ -119,8 +137,98 @@ fun ZulipRoot(
             getMutedChannels = viewModel::getMutedChannels,
             getDisabledChannels = viewModel::getDisabledChannels,
             notificationTarget = notificationTarget,
-            onNotificationTargetConsumed = onNotificationTargetConsumed
+            onNotificationTargetConsumed = onNotificationTargetConsumed,
+            initialBiometricLockEnabled = viewModel.getBiometricLockEnabled(),
+            onSaveBiometricLockEnabled = viewModel::saveBiometricLockEnabled
         )
+        }
+    }
+}
+
+@Composable
+private fun BiometricLockScreen(
+    onAuthenticated: () -> Unit,
+    onLogout: () -> Unit
+) {
+    val context = LocalContext.current
+    LaunchedEffect(Unit) {
+        val activity = context as? AppCompatActivity
+        if (activity == null) {
+            onAuthenticated()
+            return@LaunchedEffect
+        }
+        val biometricManager = BiometricManager.from(context)
+        val canAuth = biometricManager.canAuthenticate(
+            BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        )
+        if (canAuth != BiometricManager.BIOMETRIC_SUCCESS) {
+            onAuthenticated()
+            return@LaunchedEffect
+        }
+        val executor = ContextCompat.getMainExecutor(context)
+        val prompt = BiometricPrompt(activity, executor,
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    onAuthenticated()
+                }
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                    if (errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON ||
+                        errorCode == BiometricPrompt.ERROR_USER_CANCELED
+                    ) {
+                        onLogout()
+                    } else {
+                        onAuthenticated()
+                    }
+                }
+            }
+        )
+        val promptInfo = BiometricPrompt.PromptInfo.Builder()
+            .setTitle("Toya Zulip")
+            .setSubtitle("Potwierd\u017a to\u017csamo\u015b\u0107 aby otworzy\u0107 aplikacj\u0119")
+            .setAllowedAuthenticators(
+                BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                    BiometricManager.Authenticators.DEVICE_CREDENTIAL
+            )
+            .build()
+        prompt.authenticate(promptInfo)
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(Color(0xFF081626), Color(0xFF0B1D32), Color(0xFF071222))
+                )
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                imageVector = Icons.Rounded.Lock,
+                contentDescription = null,
+                tint = Color(0xFF8CD9FF),
+                modifier = Modifier.size(64.dp)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Aplikacja zablokowana",
+                color = Color(0xFFEAF2FF),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Zweryfikuj to\u017csamo\u015b\u0107, aby kontynuowa\u0107",
+                color = Color(0xFF9FB2CC),
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            TextButton(onClick = onLogout) {
+                Text("Wyloguj", color = Color(0xFF8CD9FF))
+            }
+        }
     }
 }
 
