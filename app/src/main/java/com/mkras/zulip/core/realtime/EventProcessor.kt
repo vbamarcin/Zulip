@@ -127,10 +127,17 @@ class EventProcessor @Inject constructor(
         if (isDisabledStream) {
             return
         }
-        val isSubscribedStream = if (!isPrivate && streamName.isNotBlank()) {
-            streamDao.isSubscribedStream(streamName)
+
+        // If stream cache is not populated yet, do not suppress channel notifications.
+        // Some app flows start realtime loop before stream list is fetched.
+        val isSubscribedStream = if (!isPrivate) {
+            when {
+                streamName.isBlank() -> true
+                streamDao.countStreams() == 0 -> true
+                else -> streamDao.isSubscribedStream(streamName)
+            }
         } else {
-            false
+            true
         }
 
         val isMutedDirectMessage = isPrivate && secureSessionStorage.isDirectMessageMuted(conversationKey)
