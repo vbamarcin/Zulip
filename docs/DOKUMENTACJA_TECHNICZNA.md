@@ -1,4 +1,4 @@
-# Toya Zulip — Dokumentacja techniczna (Administrator)
+# Zulip — Dokumentacja techniczna
 **Wersja aplikacji: 1.5.0**
 **Platforma: Android 9+ (API 28+)**
 **Język: Kotlin, UI: Jetpack Compose**
@@ -673,7 +673,7 @@ Wersja jest wyświetlana dynamicznie w ekranie Ustawień przez:
 ```kotlin
 import com.mkras.zulip.BuildConfig
 // ...
-Text("Toya Zulip v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) | SysADM Toya")
+Text("Zulip v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
 ```
 
 Aby zaktualizować wersję — zmień tylko `versionCode` i `versionName` w `build.gradle.kts`.

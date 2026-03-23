@@ -1051,7 +1051,7 @@ private fun SettingsPanel(
             )
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = "  Toya Zulip v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) | SysADM Toya",
+                    text = "  Zulip v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
                     color = Color(0xFF9FB2CC),
                     style = MaterialTheme.typography.labelMedium
                 )

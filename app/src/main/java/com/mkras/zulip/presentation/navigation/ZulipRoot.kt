@@ -292,7 +292,7 @@ private fun BiometricLockScreen(
             }
         )
         val promptInfo = BiometricPrompt.PromptInfo.Builder()
-            .setTitle("Toya Zulip")
+            .setTitle("Zulip")
             .setSubtitle("Potwierd\u017a to\u017csamo\u015b\u0107 aby otworzy\u0107 aplikacj\u0119")
             .setAllowedAuthenticators(
                 BiometricManager.Authenticators.BIOMETRIC_STRONG or
@@ -364,7 +364,7 @@ private fun StartupSplashScreen() {
             )
             Spacer(modifier = Modifier.height(14.dp))
             Text(
-                text = "Toya Zulip 2.0",
+                text = "Zulip",
                 color = Color(0xFFEAF2FF),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
@@ -374,11 +374,6 @@ private fun StartupSplashScreen() {
                   color = Color(0xFFBFD3EE),
                   style = MaterialTheme.typography.labelMedium
               )
-            Text(
-                text = "SysADM Toya",
-                color = Color(0xFFBFD3EE),
-                style = MaterialTheme.typography.bodyMedium
-            )
         }
     }
 }

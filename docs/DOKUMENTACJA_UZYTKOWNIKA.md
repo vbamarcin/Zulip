@@ -1,4 +1,4 @@
-# Toya Zulip — Dokumentacja użytkownika
+# Zulip — Dokumentacja użytkownika
 **Wersja aplikacji: 1.5.0**
 
 ---
@@ -232,7 +232,7 @@ Lista kanałów, które zostały wyciszone (powiadomienia wyłączone, kanał na
 Lista kanałów ukrytych z widoku. Przy każdym jest przycisk **„Włącz"**, na dole **„Włącz wszystkie kanały"**.
 
 ### Wersja aplikacji
-Na dole ekranu ustawień widoczna jest wersja aplikacji, np. `Toya Zulip v1.5.0 (1)`.
+Na dole ekranu ustawień widoczna jest wersja aplikacji, np. `Zulip v1.5.0 (1)`.
 
 ---
 

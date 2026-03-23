@@ -1,6 +1,6 @@
 # Git Setup — Instrukcje do wrzucenia na GitHub
 
-Projekt Toya Zulip jest gotowy do GitHub. Wykonaj poniższe kroki:
+Projekt Zulip jest gotowy do GitHub. Wykonaj poniższe kroki:
 
 ---
 
@@ -86,7 +86,7 @@ Jeśli są niepotrzebne pliki — sprawdź `.gitignore`.
 ## 5️⃣ Wykonaj pierwszy commit
 
 ```powershell
-git commit -m "Initial commit: Toya Zulip Android app v1.5.0"
+git commit -m "Initial commit: Zulip Android app v1.5.0"
 ```
 
 ---

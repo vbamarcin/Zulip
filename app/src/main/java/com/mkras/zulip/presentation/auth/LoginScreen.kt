@@ -109,7 +109,7 @@ fun LoginScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
-                    text = "Toya Zulip 2.0",
+                    text = "Zulip",
                     style = MaterialTheme.typography.headlineMedium,
                     color = Color(0xFFF5F7FF),
                     fontWeight = FontWeight.SemiBold

@@ -32,22 +32,23 @@ object OneDriveUpdateChecker {
                 }
 
                 val plainMatches = Regex(
-                    pattern = """Toya-Zulip-v(\d+\.\d+\.\d+)\.apk""",
+                    pattern = """(?:Toya-)?Zulip-v(\d+\.\d+\.\d+)\.apk""",
                     option = RegexOption.IGNORE_CASE
                 ).findAll(body)
                     .map { match ->
                         val version = match.groupValues[1]
-                        OneDriveUpdateInfo(version = version, fileName = "Toya-Zulip-v$version.apk")
+                        OneDriveUpdateInfo(version = version, fileName = match.value)
                     }
                     .toList()
 
                 val encodedMatches = Regex(
-                    pattern = """Toya-Zulip-v(\d+%2E\d+%2E\d+)%2Eapk""",
+                    pattern = """(?:Toya-)?Zulip-v(\d+%2E\d+%2E\d+)%2Eapk""",
                     option = RegexOption.IGNORE_CASE
                 ).findAll(body)
                     .map { match ->
                         val version = match.groupValues[1].replace("%2E", ".", ignoreCase = true)
-                        OneDriveUpdateInfo(version = version, fileName = "Toya-Zulip-v$version.apk")
+                        val decodedName = match.value.replace("%2E", ".", ignoreCase = true)
+                        OneDriveUpdateInfo(version = version, fileName = decodedName)
                     }
                     .toList()
 

@@ -1,6 +1,6 @@
 <div align="center">
 
-# Toya Zulip
+# Zulip
 
 ### Unofficial Android client for Zulip — fast, lightweight, open source
 
@@ -16,7 +16,7 @@
 
 ## Overview
 
-**Toya Zulip** is an unofficial, open-source Android client for [Zulip](https://zulip.com) — a powerful open-source team chat platform. The app aims to deliver a clean, responsive experience with full support for channels, direct messages, real-time events, and push notifications.
+This is an unofficial, open-source Android client for [Zulip](https://zulip.com) — a powerful open-source team chat platform. The app aims to deliver a clean, responsive experience with full support for channels, direct messages, real-time events, and push notifications.
 
 > Zulip is a registered trademark of Kandra Labs, Inc. This project is not affiliated with or endorsed by Kandra Labs or the Zulip project.
 

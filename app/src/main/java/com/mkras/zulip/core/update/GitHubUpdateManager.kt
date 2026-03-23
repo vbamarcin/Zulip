@@ -128,10 +128,10 @@ object GitHubUpdateManager {
                     return@use null
                 }
 
-                val explicitApk = Regex("""Toya-Zulip-v$latestVersion\.apk""", RegexOption.IGNORE_CASE)
+                val explicitApk = Regex("""(?:Toya-)?Zulip-v$latestVersion\.apk""", RegexOption.IGNORE_CASE)
                     .find(body)
                     ?.value
-                val apkName = explicitApk ?: "Toya-Zulip-v$latestVersion.apk"
+                val apkName = explicitApk ?: "Zulip-v$latestVersion.apk"
                 GitHubReleaseInfo(
                     tagName = "v$latestVersion",
                     apkName = apkName,
@@ -224,7 +224,7 @@ object GitHubUpdateManager {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
                 context.startActivity(settingsIntent)
-                error("Włącz zgodę na instalację nieznanych aplikacji dla Toya Zulip")
+                error("Włącz zgodę na instalację nieznanych aplikacji dla Zulip")
             }
 
             val requestBuilder = Request.Builder()
