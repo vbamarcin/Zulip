@@ -357,8 +357,8 @@ private fun StartupSplashScreen() {
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Image(
-                painter = painterResource(id = R.drawable.ikona),
-                contentDescription = "Logo firmy",
+                painter = painterResource(id = R.mipmap.ic_launcher),
+                contentDescription = "Logo aplikacji",
                 modifier = Modifier.size(86.dp),
                 contentScale = ContentScale.Crop
             )
