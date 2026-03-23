@@ -1,8 +1,15 @@
 # Releases
 
-latest_version: 1.7.2
-latest_apk: Zulip-v1.7.2.apk
-latest_url: https://github.com/vbamarcin/Zulip/raw/main/releases/Zulip-v1.7.2.apk
+latest_version: 1.7.3
+latest_apk: Zulip-v1.7.3.apk
+latest_url: https://github.com/vbamarcin/Zulip/raw/main/releases/Zulip-v1.7.3.apk
+
+## v1.7.3
+Zulip-v1.7.3.apk
+
+- Powiadomienia kanałowe respektują ustawienia desktopowe serwera (mute i desktop_notifications).
+- Zsynchronizowano subskrypcje z serwera (/users/me/subscriptions).
+- Włączono globalny przełącznik enable_desktop_notifications z serwera.
 
 ## v1.7.2
 Zulip-v1.7.2.apk
