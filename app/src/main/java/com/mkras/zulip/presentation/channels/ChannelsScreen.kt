@@ -8,6 +8,8 @@ import coil.request.ImageRequest
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -124,6 +126,7 @@ fun ChannelsScreen(
     onRefreshLatestMessages: () -> Unit = {},
     unreadByStream: Map<String, Int> = emptyMap(),
     unreadByTopic: Map<String, Int> = emptyMap(),
+    presenceByEmail: Map<String, String> = emptyMap(),
     mentionCandidates: List<DirectMessageCandidate> = emptyList(),
     onRequestMentionCandidates: () -> Unit = {},
     isChannelMuted: (String) -> Boolean = { false },
@@ -214,6 +217,7 @@ fun ChannelsScreen(
                     currentUserEmail = currentUserEmail,
                     serverUrl = serverUrl,
                     imageAuthHeader = imageAuthHeader,
+                    presenceByEmail = presenceByEmail,
                     onUploadAttachmentMessage = onUploadAttachmentMessage,
                     onSendChannelMessage = onSendChannelMessage,
                     onAddReaction = onAddReaction,
@@ -305,7 +309,9 @@ private fun StreamsList(
         )
     }
 
-    val enabledSortedStreams = remember(sortedStreams) {
+    var disabledChannelsVersion by remember { mutableStateOf(0) }
+
+    val enabledSortedStreams = remember(sortedStreams, disabledChannelsVersion) {
         sortedStreams.filter { stream -> !isChannelDisabled(stream.name) }
     }
 
@@ -368,6 +374,7 @@ private fun StreamsList(
                             IconButton(
                                 onClick = {
                                     onSetChannelDisabled(stream.name, true)
+                                    disabledChannelsVersion++
                                     coroutineScope.launch {
                                         snackbarHostState.currentSnackbarData?.dismiss()
                                         val result = snackbarHostState.showSnackbar(
@@ -377,6 +384,7 @@ private fun StreamsList(
                                         )
                                         if (result == SnackbarResult.ActionPerformed) {
                                             onSetChannelDisabled(stream.name, false)
+                                            disabledChannelsVersion++
                                         }
                                     }
                                 },
@@ -496,10 +504,12 @@ private fun TopicsList(
 private fun ChannelSenderAvatar(
     avatarUrl: String,
     fullName: String,
+    presenceStatus: String?,
     compactMode: Boolean,
     onClick: () -> Unit
 ) {
     val size = if (compactMode) 24.dp else 28.dp
+    val dotSize = if (compactMode) 6.dp else 7.dp
     val initials = remember(fullName) {
         fullName
             .split(" ")
@@ -508,16 +518,23 @@ private fun ChannelSenderAvatar(
             .joinToString("") { it.first().uppercaseChar().toString() }
             .ifBlank { "?" }
     }
+    var avatarLoadFailed by remember(avatarUrl) { mutableStateOf(false) }
+    val presenceColor = when (presenceStatus) {
+        "active" -> Color(0xFF43D87A)
+        "idle" -> Color(0xFFF5C543)
+        else -> null
+    }
 
     Box(modifier = Modifier.clickable { onClick() }) {
-        if (avatarUrl.isNotBlank()) {
+        if (avatarUrl.isNotBlank() && !avatarLoadFailed) {
             AsyncImage(
                 model = avatarUrl,
                 contentDescription = fullName,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .size(size)
-                    .clip(CircleShape)
+                    .clip(CircleShape),
+                onError = { avatarLoadFailed = true }
             )
         } else {
             Surface(
@@ -534,6 +551,16 @@ private fun ChannelSenderAvatar(
                     )
                 }
             }
+        }
+        if (presenceColor != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .size(dotSize)
+                    .clip(CircleShape)
+                    .background(presenceColor)
+                    .border(1.dp, PanelCard, CircleShape)
+            )
         }
     }
 }
@@ -770,6 +797,7 @@ private fun NarrowMessages(
     currentUserEmail: String = "",
     serverUrl: String,
     imageAuthHeader: String?,
+    presenceByEmail: Map<String, String> = emptyMap(),
     onUploadAttachmentMessage: UploadAttachmentMessage = { _, _, _, _, onSuccess, _ -> onSuccess() },
     onSendChannelMessage: (String, String, String) -> Unit = { _, _, _ -> },
     onAddReaction: (Long, String) -> Unit = { _, _ -> },
@@ -866,6 +894,12 @@ private fun NarrowMessages(
         if (!autoScrolledToLatest && uiState.messages.isNotEmpty()) {
             lazyListState.scrollToItem(uiState.messages.lastIndex)
             autoScrolledToLatest = true
+        }
+    }
+
+    LaunchedEffect(selectedStreamName, selectedTopicName, uiState.messages.lastOrNull()?.id) {
+        if (autoScrolledToLatest && uiState.messages.isNotEmpty()) {
+            lazyListState.animateScrollToItem(uiState.messages.lastIndex)
         }
     }
 
@@ -997,6 +1031,10 @@ private fun NarrowMessages(
                     }
 
                     items(uiState.messages, key = { it.id }) { message ->
+                        val normalizedSenderEmail = remember(message.senderEmail) {
+                            message.senderEmail.trim().lowercase()
+                        }
+                        val presenceStatus = presenceByEmail[normalizedSenderEmail]
                         val isOwnMessage = message.senderEmail.equals(currentUserEmail, ignoreCase = true)
                         val canManageMessage = isOwnMessage || canModerateAllMessages
                         val isHighlighted = highlightedMessageId == message.id
@@ -1023,13 +1061,14 @@ private fun NarrowMessages(
                                 ChannelSenderAvatar(
                                     avatarUrl = message.avatarUrl,
                                     fullName = message.senderFullName,
+                                    presenceStatus = presenceStatus,
                                     compactMode = compactMode,
                                     onClick = { pendingMentionText = "@**${message.senderFullName}**" }
                                 )
                                 Spacer(modifier = Modifier.size(6.dp))
                             }
 
-                            Box(modifier = Modifier.fillMaxWidth(if (isOwnMessage) 0.86f else 1f)) {
+                            Box(modifier = Modifier.fillMaxWidth(if (isOwnMessage) 0.88f else 1f)) {
                                 Surface(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -1039,12 +1078,12 @@ private fun NarrowMessages(
                                         ),
                                     shape = RoundedCornerShape(18.dp),
                                     color = when {
-                                        isHighlighted && isOwnMessage -> Color(0xFF2F5C84)
+                                        isHighlighted && isOwnMessage -> Color(0xFF2E5A94)
                                         isHighlighted -> Color(0xFF243E61)
                                         isWildcardMentionMessage -> Color(0xFF5A3E1A)
                                         isDirectMentionMessage -> Color(0xFF1E4B35)
                                         isStarredMessage -> Color(0xFF53401A)
-                                        isOwnMessage -> Color(0xFF23415F)
+                                        isOwnMessage -> Color(0xFF1E3A52)
                                         else -> PanelCard
                                     },
                                     border = when {
@@ -1055,21 +1094,23 @@ private fun NarrowMessages(
                                         else -> null
                                     }
                                 ) {
-                                    Column(modifier = Modifier.padding(cardPadding)) {
+                                    Column(modifier = Modifier.padding(
+                                        horizontal = if (isOwnMessage) 14.dp else 12.dp,
+                                        vertical = 10.dp
+                                    )) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
-                                            if (!isOwnMessage) {
-                                                Text(
-                                                    text = message.senderFullName,
-                                                    color = StrongText,
-                                                    style = titleStyle,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    modifier = Modifier
-                                                        .weight(1f)
-                                                        .clickable { pendingMentionText = "@**${message.senderFullName}**" }
-                                                )
-                                            } else {
-                                                Spacer(modifier = Modifier.weight(1f))
-                                            }
+                                            Text(
+                                                text = buildString {
+                                                    append(message.senderFullName)
+                                                    if (isOwnMessage) append(" (Ty)")
+                                                },
+                                                color = if (isOwnMessage) Color(0xFF8CD9FF) else StrongText,
+                                                style = titleStyle,
+                                                fontWeight = FontWeight.SemiBold,
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .clickable { pendingMentionText = "@**${message.senderFullName}**" }
+                                            )
                                             Text(
                                                 text = formatChannelMessageTime(message.timestampSeconds),
                                                 color = BodyText,
@@ -1250,6 +1291,17 @@ private fun NarrowMessages(
                                         )
                                     }
                                 }
+                            }
+
+                            if (isOwnMessage) {
+                                Spacer(modifier = Modifier.size(6.dp))
+                                ChannelSenderAvatar(
+                                    avatarUrl = message.avatarUrl,
+                                    fullName = message.senderFullName,
+                                    presenceStatus = presenceStatus,
+                                    compactMode = compactMode,
+                                    onClick = { pendingMentionText = "@**${message.senderFullName}**" }
+                                )
                             }
                         }
                     }

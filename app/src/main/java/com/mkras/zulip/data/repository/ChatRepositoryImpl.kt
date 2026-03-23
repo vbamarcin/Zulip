@@ -91,10 +91,14 @@ class ChatRepositoryImpl @Inject constructor(
         val subscribedStreams = streamDao.observeStreams()
             .map { streams -> streams.filter { it.subscribed }.map { it.name.lowercase() }.toSet() }
             .first()
+        val disabledStreams = secureSessionStorage.getDisabledChannels()
         val mapped = response.messages.map { dto ->
             val msgType = dto.type.orEmpty()
             val dtoStreamName = if (msgType == "stream") dto.displayRecipient?.toString().orEmpty().trim() else ""
             if (msgType == "stream" && dtoStreamName.isNotBlank() && !subscribedStreams.contains(dtoStreamName.lowercase())) {
+                return@map null
+            }
+            if (msgType == "stream" && dtoStreamName.isNotBlank() && disabledStreams.contains(dtoStreamName.lowercase())) {
                 return@map null
             }
             val recipients = if (msgType == "private") parsePrivateRecipients(dto.displayRecipient) else emptyList()
@@ -142,8 +146,13 @@ class ChatRepositoryImpl @Inject constructor(
 
         val selfEmail = auth.email
         val serverUrl = auth.serverUrl
+        val disabledStreams = secureSessionStorage.getDisabledChannels()
         val mapped = response.messages.map { dto ->
             val msgType = dto.type.orEmpty()
+            val dtoStreamName = if (msgType == "stream") dto.displayRecipient?.toString().orEmpty().trim() else ""
+            if (msgType == "stream" && dtoStreamName.isNotBlank() && disabledStreams.contains(dtoStreamName.lowercase())) {
+                return@map null
+            }
             val recipients = if (msgType == "private") parsePrivateRecipients(dto.displayRecipient) else emptyList()
             MessageEntity(
                 id = dto.id,
@@ -151,7 +160,7 @@ class ChatRepositoryImpl @Inject constructor(
                 senderEmail = dto.senderEmail.orEmpty(),
                 content = dto.content.orEmpty(),
                 topic = dto.subject.orEmpty(),
-                streamName = if (msgType == "stream") dto.displayRecipient?.toString().orEmpty().trim() else null,
+                streamName = if (msgType == "stream") dtoStreamName else null,
                 timestampSeconds = dto.timestamp,
                 isRead = dto.flags?.contains("read") == true,
                 isStarred = dto.flags?.contains("starred") == true,
@@ -163,7 +172,7 @@ class ChatRepositoryImpl @Inject constructor(
                 conversationKey = if (msgType == "private") DmConversationKey.fromRecipientMaps(recipients, dto.senderEmail.orEmpty(), selfEmail) else "",
                 dmDisplayName = if (msgType == "private") buildDmDisplayName(recipients, selfEmail, dto.senderFullName.orEmpty()) else ""
             )
-        }
+        }.filterNotNull()
 
         messageDao.upsertAll(mapped)
     }

@@ -123,6 +123,15 @@ class EventProcessor @Inject constructor(
         val conversationKey = if (isPrivate) DmConversationKey.fromRecipientMaps(recipients, message.senderEmail.orEmpty(), selfEmail) else ""
         val streamName = if (!isPrivate) message.displayRecipient?.toString().orEmpty().trim() else ""
         val isRead = message.flags?.contains("read") == true
+        val isDisabledStream = !isPrivate && streamName.isNotBlank() && secureSessionStorage.isChannelDisabled(streamName)
+        if (isDisabledStream) {
+            return
+        }
+        val isSubscribedStream = if (!isPrivate && streamName.isNotBlank()) {
+            streamDao.isSubscribedStream(streamName)
+        } else {
+            false
+        }
 
         val isMutedDirectMessage = isPrivate && secureSessionStorage.isDirectMessageMuted(conversationKey)
         val isMutedStream = !isPrivate && secureSessionStorage.isChannelMuted(streamName)
@@ -131,7 +140,11 @@ class EventProcessor @Inject constructor(
         val shouldNotify = if (isPrivate) {
             !isRead && dmNotificationsEnabled && !isMutedDirectMessage
         } else {
-            !isRead && !isMutedStream && channelNotificationsEnabled && (message.type == "stream" || isMentioned)
+            !isRead &&
+                !isMutedStream &&
+                channelNotificationsEnabled &&
+                isSubscribedStream &&
+                (message.type == "stream" || isMentioned)
         }
 
         val msgType = message.type.orEmpty()

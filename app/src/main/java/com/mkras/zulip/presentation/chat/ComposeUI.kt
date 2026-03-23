@@ -478,17 +478,19 @@ private fun SuggestionLeading(
     compactMode: Boolean
 ) {
     val avatarSize = if (compactMode) 28.dp else 32.dp
+    var avatarLoadFailed by remember(suggestion.avatarUrl) { mutableStateOf(false) }
     Surface(
         modifier = Modifier.size(avatarSize),
         shape = CircleShape,
         color = Color(0xFF27415D)
     ) {
-        if (!suggestion.avatarUrl.isNullOrBlank()) {
+        if (!suggestion.avatarUrl.isNullOrBlank() && !avatarLoadFailed) {
             AsyncImage(
                 model = suggestion.avatarUrl,
                 contentDescription = suggestion.label,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.size(avatarSize)
+                modifier = Modifier.size(avatarSize),
+                onError = { avatarLoadFailed = true }
             )
         } else {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.size(avatarSize)) {

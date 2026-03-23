@@ -42,7 +42,7 @@ class ZulipEventService : Service() {
         notificationHelper.ensureChannels()
         startForeground(
             ZulipNotificationHelper.FOREGROUND_NOTIFICATION_ID,
-            notificationHelper.buildForegroundNotification("Synchronizacja zdarzeń działa")
+            notificationHelper.buildForegroundNotification()
         )
 
         if (pollingStarted) {

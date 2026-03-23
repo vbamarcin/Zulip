@@ -29,7 +29,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AllInbox
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.Forum
-import androidx.compose.material.icons.rounded.People
 import androidx.compose.material.icons.automirrored.rounded.ManageSearch
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.AlertDialog
@@ -81,7 +80,6 @@ import com.mkras.zulip.core.update.GitHubReleaseInfo
 import com.mkras.zulip.core.update.GitHubUpdateManager
 import com.mkras.zulip.presentation.auth.rememberSharedImageAuthHeader
 import com.mkras.zulip.presentation.chat.ChatScreen
-import com.mkras.zulip.presentation.chat.UsersScreen
 import com.mkras.zulip.presentation.chat.ChatViewModel
 import com.mkras.zulip.presentation.channels.ChannelsScreen
 import com.mkras.zulip.presentation.channels.ChannelsViewModel
@@ -98,7 +96,6 @@ private val HOME_TABS = listOf(
     RootTab("Kanały", Icons.Rounded.Forum),
     RootTab("Wszystkie", Icons.Rounded.AllInbox),
     RootTab("Szukaj", Icons.AutoMirrored.Rounded.ManageSearch),
-    RootTab("Users", Icons.Rounded.People),
     RootTab("Ustawienia", Icons.Rounded.Settings)
 )
 private val TabBarBg      = Color(0xCC0B1728)
@@ -282,6 +279,12 @@ fun ZulipHomeScreen(
         .groupingBy { it }
         .eachCount()
 
+    val visibleAllMessages = remember(chatUiState.allMessages, isChannelDisabled) {
+        chatUiState.allMessages.filter { message ->
+            message.messageType != "stream" || !isChannelDisabled(message.streamName.orEmpty())
+        }
+    }
+
     val unreadAggregates = HomeUnreadAggregates(
         unreadDmCount = unreadDm,
         unreadChannelCount = unreadStreamMessages.size,
@@ -292,9 +295,6 @@ fun ZulipHomeScreen(
     LaunchedEffect(selectedTab) {
         if (selectedTab == 1) {
             channelsViewModel.onChannelsVisible()
-        }
-        if (selectedTab == 4) {
-            chatViewModel.ensureMentionCandidatesLoaded()
         }
     }
 
@@ -608,6 +608,7 @@ fun ZulipHomeScreen(
                             onRefreshLatestMessages = channelsViewModel::refreshSelectedNarrow,
                             unreadByStream = unreadAggregates.unreadByStream,
                             unreadByTopic = unreadAggregates.unreadByTopic,
+                            presenceByEmail = chatUiState.presenceByEmail,
                             mentionCandidates = chatUiState.newDmPeople,
                             onRequestMentionCandidates = chatViewModel::ensureMentionCandidatesLoaded,
                             isChannelMuted = isChannelMuted,
@@ -621,7 +622,7 @@ fun ZulipHomeScreen(
                             }
                         )
                         2 -> AllMessagesScreen(
-                            messages = chatUiState.allMessages,
+                            messages = visibleAllMessages,
                             compactMode = compactMode,
                             serverUrl = session.serverUrl,
                             imageAuthHeader = imageAuthHeader,
@@ -644,20 +645,7 @@ fun ZulipHomeScreen(
                             onQueryChange = chatViewModel::updateSearchQuery,
                             onSearch = chatViewModel::submitSearch
                         )
-                        4 -> UsersScreen(
-                            people = chatUiState.newDmPeople,
-                            presenceByEmail = chatUiState.presenceByEmail,
-                            isLoading = chatUiState.isNewDmLoading,
-                            error = chatUiState.newDmError,
-                            onEnsureLoaded = chatViewModel::ensureMentionCandidatesLoaded,
-                            onSelectUser = { person ->
-                                chatViewModel.startDirectMessage(person)
-                                selectedTab = 0
-                            },
-                            serverUrl = session.serverUrl,
-                            compactMode = compactMode
-                        )
-                        else -> SettingsPanel(
+                        4 -> SettingsPanel(
                             session = session,
                             onLogout = onLogout,
                             compactMode = compactMode,
@@ -732,6 +720,7 @@ fun ZulipHomeScreen(
                             isCheckingUpdate = isCheckingUpdate,
                             updateStatusText = updateStatusText
                         )
+                        else -> Unit
                     }
                 }
 

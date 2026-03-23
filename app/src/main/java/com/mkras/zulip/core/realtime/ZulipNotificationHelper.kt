@@ -78,13 +78,16 @@ class ZulipNotificationHelper @Inject constructor(
         reconcileGroupSummaries()
     }
 
-    fun buildForegroundNotification(text: String): Notification {
+    fun buildForegroundNotification(): Notification {
         return NotificationCompat.Builder(context, CHANNEL_SERVICE)
             .setSmallIcon(R.drawable.ikona)
             .setContentTitle("Zulip Unofficial")
-            .setContentText(text)
             .setOngoing(true)
             .setSilent(true)
+            .setShowWhen(false)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_DEFERRED)
             .setContentIntent(mainPendingIntent())
             .build()

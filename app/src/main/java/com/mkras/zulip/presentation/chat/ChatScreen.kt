@@ -431,7 +431,7 @@ private fun DmConversationList(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -511,7 +511,7 @@ private fun DmConversationList(
                             else -> {
                                 LazyColumn(
                                     modifier = Modifier.fillMaxSize(),
-                                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp),
                                     contentPadding = PaddingValues(bottom = 20.dp)
                                 ) {
                                     items(filteredPeople, key = { it.userId }) { person ->
@@ -532,19 +532,19 @@ private fun DmConversationList(
                                                     onCloseNewDmPicker()
                                                 },
                                             color = Color(0xFF14253B),
-                                            shape = RoundedCornerShape(14.dp),
+                                            shape = RoundedCornerShape(12.dp),
                                             border = BorderStroke(1.dp, Color(0xFF31577D))
                                         ) {
                                             Row(
                                                 modifier = Modifier.padding(
-                                                    horizontal = 12.dp,
-                                                    vertical = 10.dp
+                                                    horizontal = 10.dp,
+                                                    vertical = 7.dp
                                                 ),
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
                                                 Box(contentAlignment = Alignment.BottomEnd) {
                                                     Surface(
-                                                        modifier = Modifier.size(34.dp),
+                                                        modifier = Modifier.size(30.dp),
                                                         shape = CircleShape,
                                                         color = Color(0xFF2D4B6E)
                                                     ) {
@@ -560,7 +560,7 @@ private fun DmConversationList(
                                                     }
                                                     Box(
                                                         modifier = Modifier
-                                                            .size(11.dp)
+                                                            .size(9.dp)
                                                             .background(dotColor, CircleShape)
                                                             .border(
                                                                 1.5.dp,
@@ -577,7 +577,7 @@ private fun DmConversationList(
                                                     color = NameColor,
                                                     modifier = Modifier
                                                         .weight(1f)
-                                                        .padding(start = 10.dp),
+                                                        .padding(start = 8.dp),
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis,
                                                     fontWeight = FontWeight.Medium
@@ -724,11 +724,14 @@ private fun DmThreadView(
         }
     }
 
+    LaunchedEffect(conversationKey, messages.lastOrNull()?.id) {
+        if (messages.isNotEmpty() && autoScrolledToLatest) {
+            listState.animateScrollToItem(messages.size - 1)
+        }
+    }
+
     LaunchedEffect(conversationKey, messages.size) {
         if (messages.isNotEmpty()) {
-            if (autoScrolledToLatest && isNearBottom) {
-                listState.animateScrollToItem(messages.size - 1)  // Safe: avoids IndexOutOfBoundsException
-            }
             onMessagesRendered(messages.map { it.id })
         }
     }
@@ -1191,12 +1194,14 @@ private fun firstImageUrl(rawContent: String, serverUrl: String): String? {
 
 @Composable
 private fun AvatarImage(avatarUrl: String, initials: String, size: androidx.compose.ui.unit.Dp) {
-    if (avatarUrl.isNotBlank()) {
+    var avatarLoadFailed by remember(avatarUrl) { mutableStateOf(false) }
+    if (avatarUrl.isNotBlank() && !avatarLoadFailed) {
         AsyncImage(
             model = avatarUrl,
             contentDescription = null,
             contentScale = ContentScale.Crop,
-            modifier = Modifier.size(size).clip(CircleShape)
+            modifier = Modifier.size(size).clip(CircleShape),
+            onError = { avatarLoadFailed = true }
         )
     } else {
         Surface(modifier = Modifier.size(size), shape = CircleShape, color = Color(0xFF2D4B6E)) {

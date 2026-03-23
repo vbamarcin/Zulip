@@ -83,7 +83,7 @@ interface ZulipApiService {
     @GET("api/v1/users/me")
     suspend fun getMyProfile(): MyProfileResponseDto
 
-    @GET("api/v1/users/me/presence")
+    @GET("api/v1/realm/presence")
     suspend fun getAllPresences(): PresenceResponseDto
 
     @FormUrlEncoded

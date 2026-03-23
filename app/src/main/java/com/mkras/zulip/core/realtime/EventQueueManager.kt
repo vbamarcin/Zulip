@@ -55,7 +55,7 @@ class EventQueueManager @Inject constructor(
                 if (queueId.isNullOrBlank() || lastEventId == null) {
                     val registerResponse = service.registerEventQueue(
                         eventTypesJson = EVENT_TYPES,
-                        allPublicStreams = true
+                        allPublicStreams = false
                     )
                     check(registerResponse.result == "success") {
                         registerResponse.message.ifBlank { "Nie udało się zarejestrować kolejki zdarzeń." }
