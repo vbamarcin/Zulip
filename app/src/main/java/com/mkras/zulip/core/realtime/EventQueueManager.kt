@@ -130,6 +130,9 @@ class EventQueueManager @Inject constructor(
                 allPublicStreams = false
             )
             if (response.result == "success") {
+                secureSessionStorage.saveServerNotificationsEnabled(
+                    response.realmUserSettings?.enableDesktopNotifications
+                )
                 if (eventTypes != EVENT_TYPES_PRIMARY) {
                     Log.w(TAG, "Rejestracja kolejki w trybie zgodności. event_types=$eventTypes")
                 }

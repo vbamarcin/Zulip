@@ -31,6 +31,18 @@ class ChannelsRepositoryImpl @Inject constructor(
             credentials = BasicCredentials(auth.email, auth.apiKey)
         )
 
+        val subscriptionsResponse = service.getSubscriptions()
+        check(subscriptionsResponse.result == "success") {
+            subscriptionsResponse.message.ifBlank { "API zwrocilo blad podczas pobierania subskrypcji." }
+        }
+
+        val subscriptionsById = subscriptionsResponse.subscriptions.associateBy { it.id }
+        val mutedChannels = subscriptionsResponse.subscriptions
+            .filter { it.isMuted == true }
+            .map { it.name }
+            .toSet()
+        secureSessionStorage.replaceMutedChannels(mutedChannels)
+
         val response = service.getStreams()
         check(response.result == "success") {
             response.message.ifBlank { "API zwrocilo blad podczas pobierania streamow." }
@@ -38,11 +50,14 @@ class ChannelsRepositoryImpl @Inject constructor(
 
         streamDao.replaceAll(
             response.streams.map {
+                val subscription = subscriptionsById[it.id]
                 StreamEntity(
                     id = it.id,
                     name = it.name,
                     description = it.description.orEmpty(),
-                    subscribed = it.subscribed ?: false
+                    subscribed = subscription != null,
+                    isMuted = subscription?.isMuted ?: false,
+                    desktopNotifications = subscription?.desktopNotifications ?: true
                 )
             }
         )

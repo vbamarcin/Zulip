@@ -128,30 +128,39 @@ class EventProcessor @Inject constructor(
             return
         }
 
+        val serverNotificationsEnabled = secureSessionStorage.getServerNotificationsEnabled()
+
         // If stream cache is not populated yet, do not suppress channel notifications.
         // Some app flows start realtime loop before stream list is fetched.
+        val streamInfo = if (!isPrivate && streamName.isNotBlank()) {
+            streamDao.getStreamByName(streamName)
+        } else {
+            null
+        }
         val isSubscribedStream = if (!isPrivate) {
             when {
                 streamName.isBlank() -> true
                 streamDao.countStreams() == 0 -> true
-                else -> streamDao.isSubscribedStream(streamName)
+                else -> streamInfo?.subscribed == true
             }
         } else {
             true
         }
 
         val isMutedDirectMessage = isPrivate && secureSessionStorage.isDirectMessageMuted(conversationKey)
-        val isMutedStream = !isPrivate && secureSessionStorage.isChannelMuted(streamName)
+        val isMutedStream = !isPrivate && (streamInfo?.isMuted == true)
+        val desktopNotificationsEnabled = streamInfo?.desktopNotifications ?: true
         val isMentioned = message.flags?.contains("mentioned") == true ||
             message.flags?.contains("wildcard_mentioned") == true
         val shouldNotify = if (isPrivate) {
-            !isRead && dmNotificationsEnabled && !isMutedDirectMessage
+            serverNotificationsEnabled && !isRead && dmNotificationsEnabled && !isMutedDirectMessage
         } else {
-            !isRead &&
+            serverNotificationsEnabled &&
+                !isRead &&
                 !isMutedStream &&
                 channelNotificationsEnabled &&
                 isSubscribedStream &&
-                (message.type == "stream" || isMentioned)
+                (isMentioned || desktopNotificationsEnabled)
         }
 
         val msgType = message.type.orEmpty()

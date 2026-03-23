@@ -9,5 +9,7 @@ data class StreamEntity(
     val id: Long,
     val name: String,
     val description: String,
-    val subscribed: Boolean
+    val subscribed: Boolean,
+    val isMuted: Boolean,
+    val desktopNotifications: Boolean
 )

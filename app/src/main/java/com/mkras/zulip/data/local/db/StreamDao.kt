@@ -36,4 +36,7 @@ interface StreamDao {
 
     @Query("SELECT COUNT(*) FROM streams")
     suspend fun countStreams(): Int
+
+    @Query("SELECT * FROM streams WHERE lower(name) = lower(:streamName) LIMIT 1")
+    suspend fun getStreamByName(streamName: String): StreamEntity?
 }

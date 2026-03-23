@@ -95,6 +95,15 @@ class SecureSessionStorage @Inject constructor(
             .apply()
     }
 
+    fun saveServerNotificationsEnabled(enabled: Boolean?) {
+        if (enabled == null) return
+        prefs.edit().putBoolean(KEY_SERVER_NOTIFICATIONS_ENABLED, enabled).apply()
+    }
+
+    fun getServerNotificationsEnabled(): Boolean {
+        return prefs.getBoolean(KEY_SERVER_NOTIFICATIONS_ENABLED, true)
+    }
+
     fun getNotificationsEnabled(): Boolean {
         return getDmNotificationsEnabled() || getChannelNotificationsEnabled()
     }
@@ -148,6 +157,14 @@ class SecureSessionStorage @Inject constructor(
             updated.remove(normalized)
         }
         prefs.edit().putStringSet(KEY_MUTED_CHANNELS, updated).apply()
+    }
+
+    fun replaceMutedChannels(channels: Set<String>) {
+        val normalized = channels
+            .map { it.trim().lowercase() }
+            .filter { it.isNotBlank() }
+            .toSet()
+        prefs.edit().putStringSet(KEY_MUTED_CHANNELS, normalized).apply()
     }
 
     fun getDisabledChannels(): Set<String> {
@@ -265,6 +282,7 @@ class SecureSessionStorage @Inject constructor(
         private const val KEY_BIOMETRIC_LOCK = "biometric_lock"
           private const val KEY_AUTO_UPDATE_ENABLED = "auto_update_enabled"
           private const val KEY_GITHUB_TOKEN = "github_token"
+                private const val KEY_SERVER_NOTIFICATIONS_ENABLED = "server_notifications_enabled"
         // Draft keys are dynamic: "draft_$conversationKey"
     }
 }

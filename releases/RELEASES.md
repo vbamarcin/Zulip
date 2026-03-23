@@ -10,6 +10,7 @@ Zulip-v1.7.2.apk
 - Naprawiono regresję powiadomień kanałowych, gdy lokalny cache streamów jest pusty.
 - Dodano fallback rejestracji kolejki zdarzeń dla kompatybilności z różnymi wersjami serwera Zulip.
 - Dodano logowanie błędów pętli realtime i przetwarzania eventów dla łatwiejszej diagnostyki.
+- Powiadomienia kanałowe respektują teraz ustawienia desktopowe serwera (mute i desktop_notifications).
 
 ## v1.7.1
 Zulip-v1.7.1.apk

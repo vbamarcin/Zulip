@@ -293,7 +293,7 @@ private fun BiometricLockScreen(
         )
         val promptInfo = BiometricPrompt.PromptInfo.Builder()
             .setTitle("Zulip")
-            .setSubtitle("Potwierd\u017a to\u017csamo\u015b\u0107 aby otworzy\u0107 aplikacj\u0119")
+            .setSubtitle("Potwierdź tożsamość aby otworzyć aplikację")
             .setAllowedAuthenticators(
                 BiometricManager.Authenticators.BIOMETRIC_STRONG or
                     BiometricManager.Authenticators.DEVICE_CREDENTIAL
@@ -328,7 +328,7 @@ private fun BiometricLockScreen(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Zweryfikuj to\u017csamo\u015b\u0107, aby kontynuowa\u0107",
+                text = "Zweryfikuj tożsamość, aby kontynuować",
                 color = Color(0xFF9FB2CC),
                 style = MaterialTheme.typography.bodyMedium
             )
@@ -357,7 +357,7 @@ private fun StartupSplashScreen() {
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Image(
-                painter = painterResource(id = R.mipmap.ic_launcher),
+                painter = painterResource(id = R.drawable.ic_launcher_foreground),
                 contentDescription = "Logo aplikacji",
                 modifier = Modifier.size(86.dp),
                 contentScale = ContentScale.Crop

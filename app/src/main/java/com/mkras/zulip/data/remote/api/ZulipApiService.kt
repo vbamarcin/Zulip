@@ -8,6 +8,7 @@ import com.mkras.zulip.data.remote.dto.RegisterResponseDto
 import com.mkras.zulip.data.remote.dto.StreamsResponseDto
 import com.mkras.zulip.data.remote.dto.TopicsResponseDto
 import com.mkras.zulip.data.remote.dto.SendMessageResponseDto
+import com.mkras.zulip.data.remote.dto.SubscriptionsResponseDto
 import com.mkras.zulip.data.remote.dto.UploadFileResponseDto
 import com.mkras.zulip.data.remote.dto.ReactionResponseDto
 import com.mkras.zulip.data.remote.dto.MessageActionResponseDto
@@ -71,6 +72,9 @@ interface ZulipApiService {
 
     @GET("api/v1/streams")
     suspend fun getStreams(): StreamsResponseDto
+
+    @GET("api/v1/users/me/subscriptions")
+    suspend fun getSubscriptions(): SubscriptionsResponseDto
 
     @GET("api/v1/users/me/{stream_id}/topics")
     suspend fun getTopics(

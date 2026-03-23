@@ -10,7 +10,7 @@ import com.mkras.zulip.data.local.entity.TopicEntity
 
 @Database(
     entities = [AppBootstrapEntity::class, MessageEntity::class, StreamEntity::class, TopicEntity::class, DirectMessageCandidateEntity::class],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class ZulipDatabase : RoomDatabase() {
