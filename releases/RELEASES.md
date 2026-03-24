@@ -1,8 +1,13 @@
 # Releases
 
-latest_version: 1.7.5
-latest_apk: Zulip-v1.7.5.apk
-latest_url: https://github.com/vbamarcin/Zulip/raw/main/releases/Zulip-v1.7.5.apk
+latest_version: 1.7.8
+latest_apk: Zulip-v1.7.8.apk
+latest_url: https://github.com/vbamarcin/Zulip/raw/main/releases/Zulip-v1.7.8.apk
+
+## v1.7.8
+Zulip-v1.7.8.apk
+
+- Aktualizacja numeracji wersji. Obecny build zawiera wszystkie poprawki z wersji 1.7.5.
 
 ## v1.7.5
 Zulip-v1.7.5.apk
