@@ -1,7 +1,9 @@
 package com.mkras.zulip.data.remote.dto
 
 import com.squareup.moshi.Json
+import com.squareup.moshi.JsonClass
 
+@JsonClass(generateAdapter = true)
 data class FetchApiKeyResponseDto(
     @Json(name = "result") val result: String,
     @Json(name = "msg") val message: String,
@@ -9,6 +11,7 @@ data class FetchApiKeyResponseDto(
     @Json(name = "email") val email: String?
 )
 
+@JsonClass(generateAdapter = true)
 data class RegisterResponseDto(
     @Json(name = "result") val result: String,
     @Json(name = "msg") val message: String,
@@ -17,10 +20,12 @@ data class RegisterResponseDto(
     @Json(name = "realm_user_settings") val realmUserSettings: RealmUserSettingsDto?
 )
 
+@JsonClass(generateAdapter = true)
 data class RealmUserSettingsDto(
     @Json(name = "enable_desktop_notifications") val enableDesktopNotifications: Boolean?
 )
 
+@JsonClass(generateAdapter = true)
 data class EventDto(
     @Json(name = "id") val id: Long,
     @Json(name = "type") val type: String,
@@ -35,6 +40,8 @@ data class EventDto(
     @Json(name = "sender_id") val senderId: Long? = null,
     @Json(name = "sender_email") val senderEmail: String? = null,
     @Json(name = "emoji_name") val emojiName: String? = null,
+    @Json(name = "emoji_code") val emojiCode: String? = null,
+    @Json(name = "reaction_type") val reactionType: String? = null,
     @Json(name = "status") val presenceStatus: String? = null,
     @Json(name = "presence") val presence: Map<String, PresenceClientDto>? = null,
     @Json(name = "email") val email: String? = null,
@@ -47,10 +54,12 @@ data class EventDto(
     @Json(name = "message_type") val messageType: String? = null
 )
 
+@JsonClass(generateAdapter = true)
 data class PresenceClientDto(
     @Json(name = "status") val status: String? = null
 )
 
+@JsonClass(generateAdapter = true)
 data class EventMessageDto(
     @Json(name = "id") val id: Long,
     @Json(name = "sender_full_name") val senderFullName: String?,
@@ -61,9 +70,11 @@ data class EventMessageDto(
     @Json(name = "subject") val subject: String?,
     @Json(name = "display_recipient") val displayRecipient: Any?,
     @Json(name = "avatar_url") val avatarUrl: String? = null,
-    @Json(name = "timestamp") val timestamp: Long? = null
+    @Json(name = "timestamp") val timestamp: Long? = null,
+    @Json(name = "reactions") val reactions: List<MessageReactionDto>? = null
 )
 
+@JsonClass(generateAdapter = true)
 data class EventsResponseDto(
     @Json(name = "result") val result: String,
     @Json(name = "msg") val message: String,

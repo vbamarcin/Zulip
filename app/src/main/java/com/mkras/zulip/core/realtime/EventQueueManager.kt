@@ -23,10 +23,12 @@ class EventQueueManager @Inject constructor(
     private companion object {
         const val TAG = "EventQueueManager"
         const val EVENT_TYPES_PRIMARY = "[\"message\",\"typing\",\"presence\",\"reaction\",\"update_message_flags\",\"update_message\",\"delete_message\"]"
+        const val EVENT_TYPES_REACTION_COMPAT = "[\"message\",\"typing\",\"presence\",\"reaction\"]"
         const val EVENT_TYPES_NO_REACTION = "[\"message\",\"typing\",\"presence\",\"update_message_flags\",\"update_message\",\"delete_message\"]"
         const val EVENT_TYPES_COMPAT = "[\"message\",\"typing\",\"presence\"]"
         val EVENT_TYPE_CANDIDATES = listOf(
             EVENT_TYPES_PRIMARY,
+            EVENT_TYPES_REACTION_COMPAT,
             EVENT_TYPES_NO_REACTION,
             EVENT_TYPES_COMPAT
         )

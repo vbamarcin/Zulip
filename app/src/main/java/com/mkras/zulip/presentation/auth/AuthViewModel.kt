@@ -169,7 +169,15 @@ class AuthViewModel @Inject constructor(
     }
 
     fun getMutedChannels(): Set<String> {
-        return secureSessionStorage.getMutedChannels()
+        return secureSessionStorage.getLocalMutedChannels()
+    }
+
+    fun isTopicMuted(streamName: String, topicName: String): Boolean {
+        return secureSessionStorage.isTopicMuted(streamName, topicName)
+    }
+
+    fun setTopicMuted(streamName: String, topicName: String, muted: Boolean) {
+        secureSessionStorage.setTopicMuted(streamName, topicName, muted)
     }
 
     fun isChannelDisabled(channelName: String): Boolean {

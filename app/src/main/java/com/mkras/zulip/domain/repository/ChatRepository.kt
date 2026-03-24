@@ -22,8 +22,8 @@ interface ChatRepository {
     suspend fun markMessagesAsRead(ids: List<Long>)
     suspend fun uploadFile(fileName: String, mimeType: String?, bytes: ByteArray): Result<UploadedFile>
     suspend fun sendMessage(type: String, to: String, content: String, topic: String? = null, displayName: String = ""): Result<Long>
-    suspend fun addReaction(messageId: Long, emojiName: String): Result<Unit>
-    suspend fun removeReaction(messageId: Long, emojiName: String): Result<Unit>
+    suspend fun addReaction(messageId: Long, emojiName: String, emojiCode: String? = null, reactionType: String? = null): Result<Unit>
+    suspend fun removeReaction(messageId: Long, emojiName: String, emojiCode: String? = null, reactionType: String? = null): Result<Unit>
     suspend fun editMessage(
         messageId: Long,
         newContent: String,
@@ -34,7 +34,10 @@ interface ChatRepository {
     suspend fun searchMessages(query: String): Result<List<MessageEntity>>
     suspend fun getDirectMessageCandidates(): Result<List<DirectMessageCandidate>>
     suspend fun getPresence(): Result<Map<String, String>>
+    suspend fun setOwnPresence(status: String): Result<Unit>
+    suspend fun getCurrentUserId(): Result<Long>
     suspend fun canModerateAllMessages(): Result<Boolean>
+    suspend fun getCustomEmojis(): Result<List<CustomEmoji>>
 }
 
 data class DirectMessageCandidate(
@@ -47,4 +50,11 @@ data class DirectMessageCandidate(
 data class UploadedFile(
     val filename: String,
     val url: String
+)
+
+data class CustomEmoji(
+    val id: String,
+    val name: String,
+    val url: String,
+    val isDeactivated: Boolean
 )

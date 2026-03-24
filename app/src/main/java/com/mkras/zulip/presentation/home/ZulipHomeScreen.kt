@@ -73,9 +73,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.Image
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
-import com.mkras.zulip.core.security.StoredAuth
 import com.mkras.zulip.NotificationNavigationTarget
 import com.mkras.zulip.R
+import com.mkras.zulip.core.security.StoredAuth
 import com.mkras.zulip.core.update.GitHubReleaseInfo
 import com.mkras.zulip.core.update.GitHubUpdateManager
 import com.mkras.zulip.presentation.auth.rememberSharedImageAuthHeader
@@ -138,6 +138,8 @@ fun ZulipHomeScreen(
     onSetDirectMessageMuted: (String, Boolean) -> Unit = { _, _ -> },
     isChannelMuted: (String) -> Boolean = { false },
     onSetChannelMuted: (String, Boolean) -> Unit = { _, _ -> },
+    isTopicMuted: (String, String) -> Boolean = { _, _ -> false },
+    onSetTopicMuted: (String, String, Boolean) -> Unit = { _, _, _ -> },
     isChannelDisabled: (String) -> Boolean = { false },
     onSetChannelDisabled: (String, Boolean) -> Unit = { _, _ -> },
     getMutedChannels: () -> Set<String> = { emptySet() },
@@ -467,23 +469,18 @@ fun ZulipHomeScreen(
                     )
                 )
                 .padding(padding)
-                .padding(if (compactMode) 12.dp else 16.dp),
-            contentAlignment = Alignment.Center
+                .padding(if (compactMode) 6.dp else 8.dp)
         ) {
             Surface(
-                shape = RoundedCornerShape(if (compactMode) 20.dp else 24.dp),
-                color = Color(0x382A3E5A),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x334987C3))
+                modifier = Modifier.fillMaxSize(),
+                shape = RoundedCornerShape(if (compactMode) 16.dp else 18.dp),
+                color = Color(0x242A3E5A),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x224987C3))
             ) {
                 Column(
-                    modifier = Modifier.padding(if (compactMode) 16.dp else 24.dp),
-                    verticalArrangement = Arrangement.spacedBy(if (compactMode) 8.dp else 12.dp)
+                    modifier = Modifier.padding(if (compactMode) 8.dp else 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(if (compactMode) 4.dp else 6.dp)
                 ) {
-                    Text(
-                        text = HOME_TABS[selectedTab].label,
-                        color = Color(0xFFF2F6FF),
-                        fontWeight = FontWeight.SemiBold
-                    )
                     when (selectedTab) {
                         0 -> ChatScreen(
                             uiState = chatUiState,
@@ -525,11 +522,31 @@ fun ZulipHomeScreen(
                             onAddReaction = { msgId, emoji ->
                                 chatViewModel.addReaction(msgId, emoji)
                             },
-                            onEditMessage = { msgId ->
-                                // Edit UI to be implemented
+                            onRemoveReaction = { msgId, emoji ->
+                                chatViewModel.removeReaction(msgId, emoji)
+                            },
+                            onEditMessage = { msgId, newContent ->
+                                chatViewModel.editMessage(
+                                    messageId = msgId,
+                                    newContent = newContent,
+                                    onSuccess = {
+                                        Toast.makeText(context, "Wiadomość zaktualizowana", Toast.LENGTH_SHORT).show()
+                                    },
+                                    onError = { errorMsg ->
+                                        Toast.makeText(context, "Błąd edycji: $errorMsg", Toast.LENGTH_LONG).show()
+                                    }
+                                )
                             },
                             onDeleteMessage = { msgId ->
-                                chatViewModel.deleteMessage(msgId)
+                                chatViewModel.deleteMessage(
+                                    messageId = msgId,
+                                    onSuccess = {
+                                        Toast.makeText(context, "Wiadomość usunięta", Toast.LENGTH_SHORT).show()
+                                    },
+                                    onError = { errorMsg ->
+                                        Toast.makeText(context, "Błąd usuwania: $errorMsg", Toast.LENGTH_LONG).show()
+                                    }
+                                )
                             },
                             isDirectMessageMuted = isDirectMessageMuted,
                             onSetDirectMessageMuted = onSetDirectMessageMuted,
@@ -537,9 +554,13 @@ fun ZulipHomeScreen(
                             pendingDirectMessageContent = chatUiState.pendingDirectMessageContent,
                             onPendingDirectMessageContentConsumed = chatViewModel::consumePendingDirectMessageContent,
                             canModerateAllMessages = chatUiState.canModerateAllMessages,
+                            currentUserId = chatUiState.currentUserId,
                             typingText = chatUiState.typingText,
                             onAttachmentOperationStart = onAttachmentOperationStart,
-                            onAttachmentOperationEnd = onAttachmentOperationEnd
+                            onAttachmentOperationEnd = onAttachmentOperationEnd,
+                            customEmojiById = chatUiState.customEmojiById,
+                            customEmojiByName = chatUiState.customEmojiByName,
+                            customEmojis = chatUiState.customEmojis
                         )
                         1 -> ChannelsScreen(
                             uiState = channelsUiState,
@@ -577,9 +598,38 @@ fun ZulipHomeScreen(
                                     }
                                 )
                             },
-                            onAddReaction = { msgId, emoji -> chatViewModel.addReaction(msgId, emoji) },
-                            onEditMessage = { msgId ->
-                                Toast.makeText(context, "Edycja wiadomości kanałowych wkrótce", Toast.LENGTH_SHORT).show()
+                            onAddReaction = { msgId, emoji ->
+                                chatViewModel.addReaction(
+                                    messageId = msgId,
+                                    reaction = emoji,
+                                    onSuccess = { channelsViewModel.refreshSelectedNarrow() },
+                                    onError = { errorMsg ->
+                                        Toast.makeText(context, "Błąd dodawania reakcji: $errorMsg", Toast.LENGTH_LONG).show()
+                                    }
+                                )
+                            },
+                            onRemoveReaction = { msgId, emoji ->
+                                chatViewModel.removeReaction(
+                                    messageId = msgId,
+                                    reaction = emoji,
+                                    onSuccess = { channelsViewModel.refreshSelectedNarrow() },
+                                    onError = { errorMsg ->
+                                        Toast.makeText(context, "Błąd usuwania reakcji: $errorMsg", Toast.LENGTH_LONG).show()
+                                    }
+                                )
+                            },
+                            onEditMessage = { msgId, newContent ->
+                                chatViewModel.editMessage(
+                                    messageId = msgId,
+                                    newContent = newContent,
+                                    onSuccess = {
+                                        Toast.makeText(context, "Wiadomość zaktualizowana", Toast.LENGTH_SHORT).show()
+                                    },
+                                    onError = { raw ->
+                                        val message = moderationErrorMessage(raw)
+                                        Toast.makeText(context, "Błąd edycji: $message", Toast.LENGTH_LONG).show()
+                                    }
+                                )
                             },
                             onDeleteMessage = { msgId, onSuccess, onError ->
                                 chatViewModel.deleteMessage(
@@ -613,13 +663,19 @@ fun ZulipHomeScreen(
                             onRequestMentionCandidates = chatViewModel::ensureMentionCandidatesLoaded,
                             isChannelMuted = isChannelMuted,
                             onSetChannelMuted = onSetChannelMuted,
+                            isTopicMuted = isTopicMuted,
+                            onSetTopicMuted = onSetTopicMuted,
                             isChannelDisabled = isChannelDisabled,
                             onSetChannelDisabled = onSetChannelDisabled,
                             canModerateAllMessages = chatUiState.canModerateAllMessages,
+                            currentUserId = chatUiState.currentUserId,
                             onForwardToDm = { forwardedContent ->
                                 selectedTab = 0
                                 chatViewModel.forwardToNewDirectMessage(forwardedContent)
-                            }
+                            },
+                            customEmojiById = chatUiState.customEmojiById,
+                            customEmojiByName = chatUiState.customEmojiByName,
+                            customEmojis = chatUiState.customEmojis
                         )
                         2 -> AllMessagesScreen(
                             messages = visibleAllMessages,
@@ -650,6 +706,11 @@ fun ZulipHomeScreen(
                             onLogout = onLogout,
                             compactMode = compactMode,
                             fontScale = fontScale,
+                            ownPresenceStatus = chatUiState.ownPresenceStatus,
+                            isUpdatingOwnPresence = chatUiState.isUpdatingOwnPresence,
+                            ownPresenceUpdateMessage = chatUiState.ownPresenceUpdateMessage,
+                            onOwnPresenceStatusChanged = chatViewModel::setOwnPresence,
+                            onOwnPresenceMessageConsumed = chatViewModel::clearOwnPresenceMessage,
                             markdownEnabled = markdownEnabled,
                             notificationsEnabled = notificationsEnabled,
                             dmNotificationsEnabled = dmNotificationsEnabled,
@@ -841,6 +902,11 @@ private fun SettingsPanel(
     onLogout: () -> Unit,
     compactMode: Boolean,
     fontScale: Float,
+    ownPresenceStatus: String,
+    isUpdatingOwnPresence: Boolean,
+    ownPresenceUpdateMessage: String?,
+    onOwnPresenceStatusChanged: (String) -> Unit,
+    onOwnPresenceMessageConsumed: () -> Unit,
     markdownEnabled: Boolean,
     notificationsEnabled: Boolean,
     dmNotificationsEnabled: Boolean,
@@ -869,6 +935,13 @@ private fun SettingsPanel(
     }
     var disabledChannels by remember {
         mutableStateOf(getDisabledChannels().toList().sorted())
+    }
+
+    LaunchedEffect(ownPresenceUpdateMessage) {
+        if (!ownPresenceUpdateMessage.isNullOrBlank()) {
+            kotlinx.coroutines.delay(2800)
+            onOwnPresenceMessageConsumed()
+        }
     }
 
     Column(
@@ -909,6 +982,45 @@ private fun SettingsPanel(
                 }
                 Spacer(modifier = Modifier.height(2.dp))
                 SettingsToggleRow(label = "Markdown w kanałach", checked = markdownEnabled, onCheckedChange = onMarkdownEnabledChanged)
+
+                Text(text = "Status", color = Color(0xFFF2F6FF), fontWeight = FontWeight.Medium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { onOwnPresenceStatusChanged("active") },
+                        enabled = !isUpdatingOwnPresence,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (ownPresenceStatus == "active") Color(0xFF2B5A83) else Color(0xFF1E3550),
+                            contentColor = Color(0xFFF2F6FF)
+                        )
+                    ) {
+                        Text("Aktywny")
+                    }
+                    Button(
+                        onClick = { onOwnPresenceStatusChanged("idle") },
+                        enabled = !isUpdatingOwnPresence,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (ownPresenceStatus == "idle") Color(0xFF8A5A2E) else Color(0xFF3A2B1A),
+                            contentColor = Color(0xFFF2F6FF)
+                        )
+                    ) {
+                        Text("Zaraz wracam")
+                    }
+                    if (isUpdatingOwnPresence) {
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .size(20.dp)
+                                .align(Alignment.CenterVertically),
+                            strokeWidth = 2.dp
+                        )
+                    }
+                }
+                if (!ownPresenceUpdateMessage.isNullOrBlank()) {
+                    Text(
+                        text = ownPresenceUpdateMessage,
+                        color = if (ownPresenceUpdateMessage.startsWith("Status ustawiony")) Color(0xFF8EE4BC) else Color(0xFFFFB3A9),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
 
                 Text(text = "Bezpieczeństwo", color = Color(0xFFF2F6FF), fontWeight = FontWeight.Medium)
                 SettingsToggleRow(label = "Blokada biometryczna / PIN", checked = biometricLockEnabled, onCheckedChange = onBiometricLockChanged)

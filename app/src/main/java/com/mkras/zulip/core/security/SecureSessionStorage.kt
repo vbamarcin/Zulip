@@ -129,12 +129,23 @@ class SecureSessionStorage @Inject constructor(
             .putBoolean(KEY_DM_NOTIFICATIONS_ENABLED, true)
             .putBoolean(KEY_CHANNEL_NOTIFICATIONS_ENABLED, true)
             .putStringSet(KEY_MUTED_CHANNELS, emptySet())
+            .putStringSet(KEY_MUTED_CHANNELS_SERVER, emptySet())
             .putStringSet(KEY_MUTED_DIRECT_MESSAGES, emptySet())
             .apply()
     }
 
     fun getMutedChannels(): Set<String> {
-        return prefs.getStringSet(KEY_MUTED_CHANNELS, emptySet())
+        val local = readStringSet(KEY_MUTED_CHANNELS)
+        val server = readStringSet(KEY_MUTED_CHANNELS_SERVER)
+        return (local + server).toSet()
+    }
+
+    fun getLocalMutedChannels(): Set<String> {
+        return readStringSet(KEY_MUTED_CHANNELS)
+    }
+
+    fun getMutedTopics(): Set<String> {
+        return prefs.getStringSet(KEY_MUTED_TOPICS, emptySet())
             ?.map { it.trim().lowercase() }
             ?.filter { it.isNotBlank() }
             ?.toSet()
@@ -150,7 +161,7 @@ class SecureSessionStorage @Inject constructor(
     fun setChannelMuted(channelName: String, muted: Boolean) {
         val normalized = channelName.trim().lowercase()
         if (normalized.isBlank()) return
-        val updated = getMutedChannels().toMutableSet()
+        val updated = readStringSet(KEY_MUTED_CHANNELS).toMutableSet()
         if (muted) {
             updated.add(normalized)
         } else {
@@ -159,12 +170,33 @@ class SecureSessionStorage @Inject constructor(
         prefs.edit().putStringSet(KEY_MUTED_CHANNELS, updated).apply()
     }
 
+    fun isTopicMuted(streamName: String, topicName: String): Boolean {
+        val stream = streamName.trim().lowercase()
+        val topic = topicName.trim().lowercase()
+        if (stream.isBlank() || topic.isBlank()) return false
+        return getMutedTopics().contains("$stream::$topic")
+    }
+
+    fun setTopicMuted(streamName: String, topicName: String, muted: Boolean) {
+        val stream = streamName.trim().lowercase()
+        val topic = topicName.trim().lowercase()
+        if (stream.isBlank() || topic.isBlank()) return
+        val key = "$stream::$topic"
+        val updated = getMutedTopics().toMutableSet()
+        if (muted) {
+            updated.add(key)
+        } else {
+            updated.remove(key)
+        }
+        prefs.edit().putStringSet(KEY_MUTED_TOPICS, updated).apply()
+    }
+
     fun replaceMutedChannels(channels: Set<String>) {
         val normalized = channels
             .map { it.trim().lowercase() }
             .filter { it.isNotBlank() }
             .toSet()
-        prefs.edit().putStringSet(KEY_MUTED_CHANNELS, normalized).apply()
+        prefs.edit().putStringSet(KEY_MUTED_CHANNELS_SERVER, normalized).apply()
     }
 
     fun getDisabledChannels(): Set<String> {
@@ -264,6 +296,14 @@ class SecureSessionStorage @Inject constructor(
         }
     }
 
+    private fun readStringSet(key: String): Set<String> {
+        return prefs.getStringSet(key, emptySet())
+            ?.map { it.trim().lowercase() }
+            ?.filter { it.isNotBlank() }
+            ?.toSet()
+            .orEmpty()
+    }
+
     companion object {
         private const val FILE_NAME = "secure_auth_store"
         private const val KEY_SERVER_URL = "server_url"
@@ -276,6 +316,8 @@ class SecureSessionStorage @Inject constructor(
         private const val KEY_DM_NOTIFICATIONS_ENABLED = "dm_notifications_enabled"
         private const val KEY_CHANNEL_NOTIFICATIONS_ENABLED = "channel_notifications_enabled"
         private const val KEY_MUTED_CHANNELS = "muted_channels"
+        private const val KEY_MUTED_CHANNELS_SERVER = "muted_channels_server"
+        private const val KEY_MUTED_TOPICS = "muted_topics"
         private const val KEY_DISABLED_CHANNELS = "disabled_channels"
         private const val KEY_MUTED_DIRECT_MESSAGES = "muted_direct_messages"
         private const val KEY_MENTION_CANDIDATES_LAST_SYNC = "mention_candidates_last_sync"

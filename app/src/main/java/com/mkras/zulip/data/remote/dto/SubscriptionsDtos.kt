@@ -1,7 +1,9 @@
 package com.mkras.zulip.data.remote.dto
 
 import com.squareup.moshi.Json
+import com.squareup.moshi.JsonClass
 
+@JsonClass(generateAdapter = true)
 data class SubscriptionDto(
     @Json(name = "stream_id") val id: Long,
     @Json(name = "name") val name: String,
@@ -10,6 +12,7 @@ data class SubscriptionDto(
     @Json(name = "desktop_notifications") val desktopNotifications: Boolean? = null
 )
 
+@JsonClass(generateAdapter = true)
 data class SubscriptionsResponseDto(
     @Json(name = "result") val result: String,
     @Json(name = "msg") val message: String,

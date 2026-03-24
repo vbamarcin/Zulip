@@ -1,8 +1,10 @@
 package com.mkras.zulip.data.remote.dto
 
 import com.squareup.moshi.Json
+import com.squareup.moshi.JsonClass
 
 // Send Message
+@JsonClass(generateAdapter = true)
 data class SendMessageRequest(
     @Json(name = "content") val content: String,
     @Json(name = "type") val type: String, // "private" or "stream"
@@ -10,12 +12,14 @@ data class SendMessageRequest(
     @Json(name = "topic") val topic: String? = null // only for stream messages
 )
 
+@JsonClass(generateAdapter = true)
 data class SendMessageResponseDto(
     @Json(name = "result") val result: String,
     @Json(name = "msg") val message: String,
     @Json(name = "id") val messageId: Long
 )
 
+@JsonClass(generateAdapter = true)
 data class UploadFileResponseDto(
     @Json(name = "result") val result: String,
     @Json(name = "msg") val message: String,
@@ -25,24 +29,28 @@ data class UploadFileResponseDto(
 )
 
 // Reactions
+@JsonClass(generateAdapter = true)
 data class AddReactionRequest(
     @Json(name = "emoji_name") val emojiName: String,
     @Json(name = "emoji_code") val emojiCode: String? = null,
     @Json(name = "reaction_type") val reactionType: String = "unicode_emoji"
 )
 
+@JsonClass(generateAdapter = true)
 data class ReactionResponseDto(
     @Json(name = "result") val result: String,
     @Json(name = "msg") val message: String
 )
 
 // Search
+@JsonClass(generateAdapter = true)
 data class SearchResponseDto(
     @Json(name = "result") val result: String,
     @Json(name = "msg") val message: String,
     @Json(name = "messages") val messages: List<SearchMessageDto>
 )
 
+@JsonClass(generateAdapter = true)
 data class SearchMessageDto(
     @Json(name = "id") val id: Long,
     @Json(name = "content") val content: String,
@@ -55,6 +63,7 @@ data class SearchMessageDto(
 )
 
 // Edit/Delete (both return simple success response)
+@JsonClass(generateAdapter = true)
 data class MessageActionResponseDto(
     @Json(name = "result") val result: String,
     @Json(name = "msg") val message: String

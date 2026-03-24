@@ -16,6 +16,7 @@ import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,8 +25,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.snapshotFlow
@@ -48,6 +53,7 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
@@ -75,6 +81,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.window.Dialog
+import com.mkras.zulip.data.local.entity.MessageEntity
 import com.mkras.zulip.data.local.entity.StreamEntity
 import com.mkras.zulip.data.local.entity.TopicEntity
 import com.mkras.zulip.domain.repository.DirectMessageCandidate
@@ -87,6 +94,7 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.NotificationsOff
 import androidx.compose.material.icons.rounded.DoNotDisturb
+import androidx.compose.material.icons.rounded.MoreVert
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import java.text.DateFormat
@@ -98,6 +106,7 @@ private val StrongText = Color(0xFFEAF2FF)
 private val BodyText = Color(0xFFB8CAE4)
 private val Accent = Color(0xFF8CD9FF)
 private val ErrorText = Color(0xFFFFDDE6)
+private const val MESSAGE_SERIES_MAX_GAP_SECONDS = 5 * 60L
 
 @Composable
 fun ChannelsScreen(
@@ -114,8 +123,9 @@ fun ChannelsScreen(
     imageAuthHeader: String? = null,
     onUploadAttachmentMessage: UploadAttachmentMessage = { _, _, _, _, onSuccess, _ -> onSuccess() },
     onSendChannelMessage: (String, String, String) -> Unit = { _, _, _ -> },
-    onAddReaction: (Long, String) -> Unit = { _, _ -> },
-    onEditMessage: (Long) -> Unit = { _ -> },
+    onAddReaction: (Long, com.mkras.zulip.presentation.chat.EmojiHelper.ReactionSelection) -> Unit = { _, _ -> },
+    onRemoveReaction: (Long, com.mkras.zulip.presentation.chat.EmojiHelper.ReactionSelection) -> Unit = { _, _ -> },
+    onEditMessage: (Long, String) -> Unit = { _, _ -> },
     onDeleteMessage: (Long, () -> Unit, (String) -> Unit) -> Unit = { _, onSuccess, _ -> onSuccess() },
     onMoveMessageToTopic: (Long, String, String, Long?, () -> Unit, (String) -> Unit) -> Unit =
         { _, _, _, _, onSuccess, _ -> onSuccess() },
@@ -131,13 +141,19 @@ fun ChannelsScreen(
     onRequestMentionCandidates: () -> Unit = {},
     isChannelMuted: (String) -> Boolean = { false },
     onSetChannelMuted: (String, Boolean) -> Unit = { _, _ -> },
+    isTopicMuted: (String, String) -> Boolean = { _, _ -> false },
+    onSetTopicMuted: (String, String, Boolean) -> Unit = { _, _, _ -> },
     isChannelDisabled: (String) -> Boolean = { false },
     onSetChannelDisabled: (String, Boolean) -> Unit = { _, _ -> },
     canModerateAllMessages: Boolean = false,
-    onForwardToDm: (String) -> Unit = {}
+    currentUserId: Long? = null,
+    onForwardToDm: (String) -> Unit = {},
+    customEmojiById: Map<String, String> = emptyMap(),
+    customEmojiByName: Map<String, String> = emptyMap(),
+    customEmojis: List<com.mkras.zulip.presentation.chat.EmojiHelper.CustomEmojiItem> = emptyList()
 ) {
-    val sectionGap = if (compactMode) 6.dp else 8.dp
-    val cardPadding = if (compactMode) 10.dp else 12.dp
+    val sectionGap = if (compactMode) 4.dp else 6.dp
+    val cardPadding = if (compactMode) 8.dp else 10.dp
     val bodyStyle = MaterialTheme.typography.bodySmall
     val titleStyle = MaterialTheme.typography.titleSmall
     val backStyle = if (compactMode) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelMedium
@@ -203,7 +219,19 @@ fun ChannelsScreen(
                     isChannelDisabled = isChannelDisabled,
                     onSetChannelDisabled = onSetChannelDisabled
                 )
-                uiState.selectedTopic == null -> TopicsList(uiState, onTopicSelected, onBackToStreams, sectionGap, cardPadding, titleStyle, bodyStyle, backStyle, unreadByTopic)
+                uiState.selectedTopic == null -> TopicsList(
+                    uiState,
+                    onTopicSelected,
+                    onBackToStreams,
+                    sectionGap,
+                    cardPadding,
+                    titleStyle,
+                    bodyStyle,
+                    backStyle,
+                    unreadByTopic,
+                    isChannelMuted,
+                    onSetChannelMuted
+                )
                 else -> NarrowMessages(
                     uiState = uiState,
                     onBackToTopics = onBackToTopics,
@@ -221,6 +249,7 @@ fun ChannelsScreen(
                     onUploadAttachmentMessage = onUploadAttachmentMessage,
                     onSendChannelMessage = onSendChannelMessage,
                     onAddReaction = onAddReaction,
+                    onRemoveReaction = onRemoveReaction,
                     onEditMessage = onEditMessage,
                     onDeleteMessage = onDeleteMessage,
                     onMoveMessageToTopic = onMoveMessageToTopic,
@@ -231,10 +260,14 @@ fun ChannelsScreen(
                     mentionCandidates = mentionCandidates,
                     onRequestMentionCandidates = onRequestMentionCandidates,
                     topicCandidates = topicCandidates,
-                    isChannelMuted = isChannelMuted,
-                    onSetChannelMuted = onSetChannelMuted,
+                    isTopicMuted = isTopicMuted,
+                    onSetTopicMuted = onSetTopicMuted,
                     canModerateAllMessages = canModerateAllMessages,
-                    onForwardToDm = onForwardToDm
+                    currentUserId = currentUserId,
+                    onForwardToDm = onForwardToDm,
+                    customEmojiById = customEmojiById,
+                    customEmojiByName = customEmojiByName,
+                    customEmojis = customEmojis
                 )
             }
         }
@@ -432,14 +465,67 @@ private fun TopicsList(
     titleStyle: androidx.compose.ui.text.TextStyle,
     bodyStyle: androidx.compose.ui.text.TextStyle,
     backStyle: androidx.compose.ui.text.TextStyle,
-    unreadByTopic: Map<String, Int>
+    unreadByTopic: Map<String, Int>,
+    isChannelMuted: (String) -> Boolean,
+    onSetChannelMuted: (String, Boolean) -> Unit
 ) {
+    val selectedStreamName = uiState.selectedStream?.name.orEmpty()
+    val coroutineScope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+    var isCurrentChannelMuted by remember(selectedStreamName) {
+        mutableStateOf(if (selectedStreamName.isBlank()) false else isChannelMuted(selectedStreamName))
+    }
+
+    LaunchedEffect(selectedStreamName) {
+        isCurrentChannelMuted = if (selectedStreamName.isBlank()) false else isChannelMuted(selectedStreamName)
+    }
+
+    fun toggleChannelMuted() {
+        if (selectedStreamName.isBlank()) return
+        val newMuted = !isCurrentChannelMuted
+        isCurrentChannelMuted = newMuted
+        onSetChannelMuted(selectedStreamName, newMuted)
+        coroutineScope.launch {
+            snackbarHostState.currentSnackbarData?.dismiss()
+            if (newMuted) {
+                val result = snackbarHostState.showSnackbar(
+                    message = "Kanał wyciszony",
+                    actionLabel = "Cofnij",
+                    withDismissAction = true
+                )
+                if (result == SnackbarResult.ActionPerformed) {
+                    isCurrentChannelMuted = false
+                    onSetChannelMuted(selectedStreamName, false)
+                }
+            }
+        }
+    }
+
     if (uiState.topics.isEmpty()) {
         val selectedStream = uiState.selectedStream
         val streamId = selectedStream?.id ?: 0L
         Column(verticalArrangement = Arrangement.spacedBy(sectionGap)) {
-            Row(modifier = Modifier.fillMaxWidth().clickable { onBackToStreams() }.padding(8.dp)) {
-                Text("<- Wróć do streamów", color = Accent, fontWeight = FontWeight.Medium, style = backStyle)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "<- Wróć do streamów",
+                    color = Accent,
+                    fontWeight = FontWeight.Medium,
+                    style = backStyle,
+                    modifier = Modifier.clickable { onBackToStreams() }
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                if (selectedStreamName.isNotBlank()) {
+                    IconButton(onClick = ::toggleChannelMuted) {
+                        Icon(
+                            imageVector = if (isCurrentChannelMuted) Icons.Rounded.NotificationsOff else Icons.Rounded.Notifications,
+                            contentDescription = if (isCurrentChannelMuted) "Kanał wyciszony" else "Wycisz kanał",
+                            tint = if (isCurrentChannelMuted) Color(0xFFFF8A80) else Accent
+                        )
+                    }
+                }
             }
             Card(
                 modifier = Modifier
@@ -471,12 +557,30 @@ private fun TopicsList(
 
     LazyColumn(verticalArrangement = Arrangement.spacedBy(sectionGap)) {
         item {
-            Row(modifier = Modifier.fillMaxWidth().clickable { onBackToStreams() }.padding(8.dp)) {
-                Text("<- Wróć do streamów", color = Accent, fontWeight = FontWeight.Medium, style = backStyle)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "<- Wróć do streamów",
+                    color = Accent,
+                    fontWeight = FontWeight.Medium,
+                    style = backStyle,
+                    modifier = Modifier.clickable { onBackToStreams() }
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                if (selectedStreamName.isNotBlank()) {
+                    IconButton(onClick = ::toggleChannelMuted) {
+                        Icon(
+                            imageVector = if (isCurrentChannelMuted) Icons.Rounded.NotificationsOff else Icons.Rounded.Notifications,
+                            contentDescription = if (isCurrentChannelMuted) "Kanał wyciszony" else "Wycisz kanał",
+                            tint = if (isCurrentChannelMuted) Color(0xFFFF8A80) else Accent
+                        )
+                    }
+                }
             }
         }
         items(uiState.topics, key = { it.key }) { topic ->
-            val selectedStreamName = uiState.selectedStream?.name.orEmpty()
             val topicKey = "$selectedStreamName::${topic.name}"
             val unreadCount = unreadByTopic[topicKey] ?: 0
             Card(
@@ -508,8 +612,8 @@ private fun ChannelSenderAvatar(
     compactMode: Boolean,
     onClick: () -> Unit
 ) {
-    val size = if (compactMode) 24.dp else 28.dp
-    val dotSize = if (compactMode) 6.dp else 7.dp
+    val size = if (compactMode) 22.dp else 24.dp
+    val dotSize = if (compactMode) 5.dp else 6.dp
     val initials = remember(fullName) {
         fullName
             .split(" ")
@@ -567,6 +671,15 @@ private fun ChannelSenderAvatar(
 
 private fun formatChannelMessageTime(timestampSeconds: Long): String {
     return DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(timestampSeconds * 1000))
+}
+
+private fun isSameMessageSeries(previous: MessageEntity, current: MessageEntity): Boolean {
+    if (!previous.senderEmail.equals(current.senderEmail, ignoreCase = true)) return false
+    if (previous.streamName != current.streamName) return false
+    if (previous.topic != current.topic) return false
+
+    val gapSeconds = current.timestampSeconds - previous.timestampSeconds
+    return gapSeconds in 0..MESSAGE_SERIES_MAX_GAP_SECONDS
 }
 
 private fun hasWildcardMention(content: String): Boolean {
@@ -782,7 +895,7 @@ private fun EmptyState(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun NarrowMessages(
     uiState: ChannelsUiState,
@@ -800,8 +913,9 @@ private fun NarrowMessages(
     presenceByEmail: Map<String, String> = emptyMap(),
     onUploadAttachmentMessage: UploadAttachmentMessage = { _, _, _, _, onSuccess, _ -> onSuccess() },
     onSendChannelMessage: (String, String, String) -> Unit = { _, _, _ -> },
-    onAddReaction: (Long, String) -> Unit = { _, _ -> },
-    onEditMessage: (Long) -> Unit = { _ -> },
+    onAddReaction: (Long, com.mkras.zulip.presentation.chat.EmojiHelper.ReactionSelection) -> Unit = { _, _ -> },
+    onRemoveReaction: (Long, com.mkras.zulip.presentation.chat.EmojiHelper.ReactionSelection) -> Unit = { _, _ -> },
+    onEditMessage: (Long, String) -> Unit = { _, _ -> },
     onDeleteMessage: (Long, () -> Unit, (String) -> Unit) -> Unit = { _, onSuccess, _ -> onSuccess() },
     onMoveMessageToTopic: (Long, String, String, Long?, () -> Unit, (String) -> Unit) -> Unit =
         { _, _, _, _, onSuccess, _ -> onSuccess() },
@@ -814,8 +928,14 @@ private fun NarrowMessages(
     topicCandidates: List<String> = emptyList(),
     isChannelMuted: (String) -> Boolean = { false },
     onSetChannelMuted: (String, Boolean) -> Unit = { _, _ -> },
+    isTopicMuted: (String, String) -> Boolean = { _, _ -> false },
+    onSetTopicMuted: (String, String, Boolean) -> Unit = { _, _, _ -> },
     canModerateAllMessages: Boolean = false,
-    onForwardToDm: (String) -> Unit = {}
+    currentUserId: Long? = null,
+    onForwardToDm: (String) -> Unit = {},
+    customEmojiById: Map<String, String> = emptyMap(),
+    customEmojiByName: Map<String, String> = emptyMap(),
+    customEmojis: List<com.mkras.zulip.presentation.chat.EmojiHelper.CustomEmojiItem> = emptyList()
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -824,6 +944,7 @@ private fun NarrowMessages(
     val selectedTopicName = uiState.selectedTopic?.name.orEmpty()
     val topicTitle = selectedTopicName.ifBlank { "Wszystkie wiadomości kanału" }
     val lazyListState = rememberLazyListState()
+    val isImeVisible = WindowInsets.Companion.isImeVisible
 
     var expandedMenuMessageId by remember { mutableStateOf<Long?>(null) }
     var emojiPickerMessageId by remember { mutableStateOf<Long?>(null) }
@@ -833,17 +954,23 @@ private fun NarrowMessages(
     var isUploadingAttachment by remember { mutableStateOf(false) }
     var moveMessageId by remember { mutableStateOf<Long?>(null) }
     var moveMessageContent by remember { mutableStateOf("") }
+    var editMessageId by remember { mutableStateOf<Long?>(null) }
+    var editMessageDraft by remember { mutableStateOf("") }
     var moveTargetStreamId by remember { mutableStateOf<Long?>(uiState.selectedStream?.id) }
     var moveTargetTopic by remember { mutableStateOf(selectedTopicName) }
     var moveTopicOptions by remember { mutableStateOf(topicCandidates) }
     var moveStreamMenuExpanded by remember { mutableStateOf(false) }
     var moveTopicMenuExpanded by remember { mutableStateOf(false) }
-    var isCurrentChannelMuted by remember(selectedStreamName) {
-        mutableStateOf(if (selectedStreamName.isBlank()) false else isChannelMuted(selectedStreamName))
+    var isCurrentTopicMuted by remember(selectedStreamName, selectedTopicName) {
+        mutableStateOf(
+            if (selectedStreamName.isBlank() || selectedTopicName.isBlank()) false
+            else isTopicMuted(selectedStreamName, selectedTopicName)
+        )
     }
 
-    LaunchedEffect(selectedStreamName) {
-        isCurrentChannelMuted = if (selectedStreamName.isBlank()) false else isChannelMuted(selectedStreamName)
+    LaunchedEffect(selectedStreamName, selectedTopicName) {
+        isCurrentTopicMuted = if (selectedStreamName.isBlank() || selectedTopicName.isBlank()) false
+        else isTopicMuted(selectedStreamName, selectedTopicName)
     }
 
     LaunchedEffect(selectedStreamName, selectedTopicName, topicCandidates) {
@@ -903,6 +1030,12 @@ private fun NarrowMessages(
         }
     }
 
+    LaunchedEffect(isImeVisible, selectedStreamName, selectedTopicName, uiState.messages.lastOrNull()?.id) {
+        if (isImeVisible && uiState.messages.isNotEmpty()) {
+            lazyListState.animateScrollToItem(uiState.messages.lastIndex)
+        }
+    }
+
     LaunchedEffect(uiState.scrollToMessageId, uiState.messages.size) {
         val targetId = uiState.scrollToMessageId ?: return@LaunchedEffect
         val index = uiState.messages.indexOfFirst { it.id == targetId }
@@ -931,47 +1064,56 @@ private fun NarrowMessages(
         }
     }
 
-    fun toggleChannelMuted() {
-        if (selectedStreamName.isBlank()) return
-        val newMuted = !isCurrentChannelMuted
-        isCurrentChannelMuted = newMuted
-        onSetChannelMuted(selectedStreamName, newMuted)
+
+    fun toggleTopicMuted() {
+        if (selectedStreamName.isBlank() || selectedTopicName.isBlank()) return
+        val newMuted = !isCurrentTopicMuted
+        isCurrentTopicMuted = newMuted
+        onSetTopicMuted(selectedStreamName, selectedTopicName, newMuted)
         coroutineScope.launch {
             snackbarHostState.currentSnackbarData?.dismiss()
             if (newMuted) {
                 val result = snackbarHostState.showSnackbar(
-                    message = "Kanał wyciszony",
+                    message = "Wątek wyciszony",
                     actionLabel = "Cofnij",
                     withDismissAction = true
                 )
                 if (result == SnackbarResult.ActionPerformed) {
-                    isCurrentChannelMuted = false
-                    onSetChannelMuted(selectedStreamName, false)
+                    isCurrentTopicMuted = false
+                    onSetTopicMuted(selectedStreamName, selectedTopicName, false)
                 }
             }
         }
     }
 
+    data class ReactionToken(
+        val name: String,
+        val code: String?,
+        val type: String?
+    )
+
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .imePadding(),
             verticalArrangement = Arrangement.spacedBy(sectionGap)
         ) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(if (compactMode) 18.dp else 22.dp),
+                shape = RoundedCornerShape(if (compactMode) 16.dp else 18.dp),
                 color = PanelCard
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = cardPadding, vertical = if (compactMode) 8.dp else 10.dp),
+                    modifier = Modifier.padding(horizontal = cardPadding, vertical = if (compactMode) 6.dp else 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "<- Wróć",
+                        text = "Wróć",
                         color = Accent,
                         fontWeight = FontWeight.Medium,
                         style = backStyle,
-                        modifier = Modifier.clickable { onBackToTopics() }.padding(end = 12.dp)
+                        modifier = Modifier.clickable { onBackToTopics() }.padding(end = 8.dp)
                     )
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
@@ -990,12 +1132,14 @@ private fun NarrowMessages(
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-                    IconButton(onClick = ::toggleChannelMuted) {
-                        Icon(
-                            imageVector = if (isCurrentChannelMuted) Icons.Rounded.NotificationsOff else Icons.Rounded.Notifications,
-                            contentDescription = if (isCurrentChannelMuted) "Kanał wyciszony" else "Wycisz kanał",
-                            tint = if (isCurrentChannelMuted) Color(0xFFFF8A80) else Accent
-                        )
+                    if (selectedTopicName.isNotBlank()) {
+                        IconButton(onClick = ::toggleTopicMuted) {
+                            Icon(
+                                imageVector = Icons.Rounded.DoNotDisturb,
+                                contentDescription = if (isCurrentTopicMuted) "Wątek wyciszony" else "Wycisz wątek",
+                                tint = if (isCurrentTopicMuted) Color(0xFFFFC977) else Accent
+                            )
+                        }
                     }
                 }
             }
@@ -1012,12 +1156,13 @@ private fun NarrowMessages(
                     )
                 }
             } else {
+                val messageGap = if (compactMode) 1.dp else 2.dp
                 LazyColumn(
                     state = lazyListState,
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(sectionGap)
+                    verticalArrangement = Arrangement.spacedBy(messageGap)
                 ) {
                     if (uiState.isLoadingOlderMessages) {
                         item {
@@ -1030,12 +1175,15 @@ private fun NarrowMessages(
                         }
                     }
 
-                    items(uiState.messages, key = { it.id }) { message ->
+                    itemsIndexed(uiState.messages, key = { _, message -> message.id }) { index, message ->
+                        val previousMessage = uiState.messages.getOrNull(index - 1)
                         val normalizedSenderEmail = remember(message.senderEmail) {
                             message.senderEmail.trim().lowercase()
                         }
                         val presenceStatus = presenceByEmail[normalizedSenderEmail]
                         val isOwnMessage = message.senderEmail.equals(currentUserEmail, ignoreCase = true)
+                        val startsSeries = previousMessage == null || !isSameMessageSeries(previousMessage, message)
+                        val isSeriesContinuation = !startsSeries
                         val canManageMessage = isOwnMessage || canModerateAllMessages
                         val isHighlighted = highlightedMessageId == message.id
                         val isStarredMessage = message.isStarred
@@ -1053,22 +1201,13 @@ private fun NarrowMessages(
                         }
 
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 2.dp),
                             horizontalArrangement = if (isOwnMessage) Arrangement.End else Arrangement.Start,
                             verticalAlignment = Alignment.Top
                         ) {
-                            if (!isOwnMessage) {
-                                ChannelSenderAvatar(
-                                    avatarUrl = message.avatarUrl,
-                                    fullName = message.senderFullName,
-                                    presenceStatus = presenceStatus,
-                                    compactMode = compactMode,
-                                    onClick = { pendingMentionText = "@**${message.senderFullName}**" }
-                                )
-                                Spacer(modifier = Modifier.size(6.dp))
-                            }
-
-                            Box(modifier = Modifier.fillMaxWidth(if (isOwnMessage) 0.88f else 1f)) {
+                            Box(modifier = Modifier.fillMaxWidth()) {
                                 Surface(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -1076,7 +1215,7 @@ private fun NarrowMessages(
                                             onClick = {},
                                             onLongClick = { expandedMenuMessageId = message.id }
                                         ),
-                                    shape = RoundedCornerShape(18.dp),
+                                    shape = RoundedCornerShape(if (compactMode) 15.dp else 17.dp),
                                     color = when {
                                         isHighlighted && isOwnMessage -> Color(0xFF2E5A94)
                                         isHighlighted -> Color(0xFF243E61)
@@ -1094,87 +1233,124 @@ private fun NarrowMessages(
                                         else -> null
                                     }
                                 ) {
-                                    Column(modifier = Modifier.padding(
-                                        horizontal = if (isOwnMessage) 14.dp else 12.dp,
-                                        vertical = 10.dp
-                                    )) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text(
-                                                text = buildString {
-                                                    append(message.senderFullName)
-                                                    if (isOwnMessage) append(" (Ty)")
-                                                },
-                                                color = if (isOwnMessage) Color(0xFF8CD9FF) else StrongText,
-                                                style = titleStyle,
-                                                fontWeight = FontWeight.SemiBold,
-                                                modifier = Modifier
-                                                    .weight(1f)
-                                                    .clickable { pendingMentionText = "@**${message.senderFullName}**" }
-                                            )
-                                            Text(
-                                                text = formatChannelMessageTime(message.timestampSeconds),
-                                                color = BodyText,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                modifier = Modifier.padding(start = 8.dp)
-                                            )
-                                        }
-                                        if (isStarredMessage || isWildcardMentionMessage || isDirectMentionMessage) {
+                                    Column(
+                                        modifier = Modifier.padding(
+                                            horizontal = if (compactMode) 7.dp else 9.dp,
+                                            vertical = if (isSeriesContinuation) {
+                                                if (compactMode) 4.dp else 5.dp
+                                            } else {
+                                                if (compactMode) 6.dp else 7.dp
+                                            }
+                                        )
+                                    ) {
+                                        if (startsSeries) {
                                             Row(
-                                                modifier = Modifier.padding(top = 4.dp),
-                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                verticalAlignment = Alignment.Top,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                                             ) {
-                                                if (isStarredMessage) {
-                                                    Surface(
-                                                        shape = RoundedCornerShape(999.dp),
-                                                        color = Color(0x33FFD76E)
-                                                    ) {
-                                                        Text(
-                                                            text = "★ gwiazdka",
-                                                            color = Color(0xFFFFE39A),
-                                                            style = MaterialTheme.typography.labelSmall,
-                                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                                        )
-                                                    }
+                                                if (!isOwnMessage) {
+                                                    ChannelSenderAvatar(
+                                                        avatarUrl = message.avatarUrl,
+                                                        fullName = message.senderFullName,
+                                                        presenceStatus = presenceStatus,
+                                                        compactMode = true,
+                                                        onClick = { expandedMenuMessageId = message.id }
+                                                    )
                                                 }
-                                                if (isWildcardMentionMessage) {
-                                                    Surface(
-                                                        shape = RoundedCornerShape(999.dp),
-                                                        color = Color(0x33FFC977)
-                                                    ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
                                                         Text(
-                                                            text = "@all",
-                                                            color = Color(0xFFFFD79A),
-                                                            style = MaterialTheme.typography.labelSmall,
-                                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                                            text = buildString {
+                                                                append(message.senderFullName)
+                                                                if (isOwnMessage) append(" (Ty)")
+                                                            },
+                                                            color = if (isOwnMessage) Color(0xFF8CD9FF) else StrongText,
+                                                            style = titleStyle,
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis,
+                                                            modifier = Modifier
+                                                                .weight(1f)
+                                                                .clickable { pendingMentionText = "@**${message.senderFullName}**" }
                                                         )
-                                                    }
-                                                }
-                                                if (isDirectMentionMessage) {
-                                                    Surface(
-                                                        shape = RoundedCornerShape(999.dp),
-                                                        color = Color(0x338EE4BC)
-                                                    ) {
                                                         Text(
-                                                            text = "@ty",
-                                                            color = Color(0xFFB9F2D8),
+                                                            text = formatChannelMessageTime(message.timestampSeconds),
+                                                            color = BodyText,
                                                             style = MaterialTheme.typography.labelSmall,
-                                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                                            modifier = Modifier.padding(start = 6.dp)
+                                                        )
+                                                        IconButton(
+                                                            onClick = { expandedMenuMessageId = message.id },
+                                                            modifier = Modifier.size(if (compactMode) 24.dp else 26.dp)
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = Icons.Rounded.MoreVert,
+                                                                contentDescription = "Menu wiadomości",
+                                                                tint = Accent,
+                                                                modifier = Modifier.size(15.dp)
+                                                            )
+                                                        }
+                                                    }
+                                                    if (isStarredMessage || isWildcardMentionMessage || isDirectMentionMessage) {
+                                                        Row(
+                                                            modifier = Modifier.padding(top = 2.dp),
+                                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                        ) {
+                                                            if (isStarredMessage) {
+                                                                Surface(
+                                                                    shape = RoundedCornerShape(999.dp),
+                                                                    color = Color(0x33FFD76E)
+                                                                ) {
+                                                                    Text(
+                                                                        text = "★ gwiazdka",
+                                                                        color = Color(0xFFFFE39A),
+                                                                        style = MaterialTheme.typography.labelSmall,
+                                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                                    )
+                                                                }
+                                                            }
+                                                            if (isWildcardMentionMessage) {
+                                                                Surface(
+                                                                    shape = RoundedCornerShape(999.dp),
+                                                                    color = Color(0x33FFC977)
+                                                                ) {
+                                                                    Text(
+                                                                        text = "@all",
+                                                                        color = Color(0xFFFFD79A),
+                                                                        style = MaterialTheme.typography.labelSmall,
+                                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                                    )
+                                                                }
+                                                            }
+                                                            if (isDirectMentionMessage) {
+                                                                Surface(
+                                                                    shape = RoundedCornerShape(999.dp),
+                                                                    color = Color(0x338EE4BC)
+                                                                ) {
+                                                                    Text(
+                                                                        text = "@ty",
+                                                                        color = Color(0xFFB9F2D8),
+                                                                        style = MaterialTheme.typography.labelSmall,
+                                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                                    )
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                    if (selectedTopicName.isBlank() && message.topic.isNotBlank()) {
+                                                        Text(
+                                                            text = message.topic,
+                                                            color = Accent,
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            modifier = Modifier.padding(top = 1.dp)
                                                         )
                                                     }
                                                 }
                                             }
+                                            Spacer(modifier = Modifier.size(6.dp))
                                         }
-                                        if (selectedTopicName.isBlank() && message.topic.isNotBlank()) {
-                                            Text(
-                                                text = message.topic,
-                                                color = Accent,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                modifier = Modifier.padding(top = 2.dp)
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.size(8.dp))
                                         Surface(
-                                            shape = RoundedCornerShape(18.dp),
+                                            shape = RoundedCornerShape(if (compactMode) 13.dp else 15.dp),
                                             color = Color(0xFF213754)
                                         ) {
                                             if (markdownEnabled) {
@@ -1200,8 +1376,64 @@ private fun NarrowMessages(
                                                 compactMode = compactMode,
                                                 modifier = Modifier
                                                     .fillMaxWidth()
-                                                    .padding(top = 8.dp)
+                                                    .padding(top = 6.dp)
                                             )
+                                        }
+                                        val reactions = com.mkras.zulip.presentation.chat.EmojiHelper
+                                            .summarizeReactionSummary(message.reactionSummary, currentUserId)
+                                        if (reactions.isNotEmpty()) {
+                                            Row(
+                                                modifier = Modifier.padding(top = 4.dp),
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                reactions.forEach { aggregate ->
+                                                    val token = aggregate.token
+                                                    val display = com.mkras.zulip.presentation.chat.EmojiHelper
+                                                        .resolveReactionDisplay(
+                                                            token = token,
+                                                            customEmojiById = customEmojiById,
+                                                            customEmojiByName = customEmojiByName
+                                                        )
+                                                    Surface(
+                                                        modifier = Modifier.clickable {
+                                                            val selection = com.mkras.zulip.presentation.chat.EmojiHelper.toReactionSelection(token)
+                                                            if (aggregate.reactedByCurrentUser) {
+                                                                onRemoveReaction(message.id, selection)
+                                                            } else {
+                                                                onAddReaction(message.id, selection)
+                                                            }
+                                                        },
+                                                        shape = RoundedCornerShape(999.dp),
+                                                        color = if (aggregate.reactedByCurrentUser) Color(0x4A8CD9FF) else Color(0x2A8CD9FF)
+                                                    ) {
+                                                        Row(
+                                                            verticalAlignment = Alignment.CenterVertically,
+                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                        ) {
+                                                            if (!display.imageUrl.isNullOrBlank()) {
+                                                                AsyncImage(
+                                                                    model = display.imageUrl,
+                                                                    contentDescription = token.name,
+                                                                    modifier = Modifier.size(14.dp)
+                                                                )
+                                                            } else {
+                                                                Text(
+                                                                    text = display.emojiText ?: "",
+                                                                    color = StrongText,
+                                                                    style = MaterialTheme.typography.labelSmall
+                                                                )
+                                                            }
+                                                            if (aggregate.count > 1) {
+                                                                Text(
+                                                                    text = " ${aggregate.count}",
+                                                                    color = StrongText,
+                                                                    style = MaterialTheme.typography.labelSmall
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -1271,7 +1503,8 @@ private fun NarrowMessages(
                                             text = { Text(" Edytuj") },
                                             onClick = {
                                                 expandedMenuMessageId = null
-                                                onEditMessage(message.id)
+                                                editMessageId = message.id
+                                                editMessageDraft = plainContent
                                             }
                                         )
                                         DropdownMenuItem(
@@ -1293,16 +1526,6 @@ private fun NarrowMessages(
                                 }
                             }
 
-                            if (isOwnMessage) {
-                                Spacer(modifier = Modifier.size(6.dp))
-                                ChannelSenderAvatar(
-                                    avatarUrl = message.avatarUrl,
-                                    fullName = message.senderFullName,
-                                    presenceStatus = presenceStatus,
-                                    compactMode = compactMode,
-                                    onClick = { pendingMentionText = "@**${message.senderFullName}**" }
-                                )
-                            }
                         }
                     }
                 }
@@ -1324,7 +1547,7 @@ private fun NarrowMessages(
                     }
                 },
                 compactMode = compactMode,
-                modifier = Modifier.imePadding(),
+                modifier = Modifier.navigationBarsPadding(),
                 enabled = selectedStreamName.isNotBlank() && selectedTopicName.isNotBlank() && !isUploadingAttachment,
                 mentionCandidates = mentionCandidates,
                 onRequestMentionCandidates = onRequestMentionCandidates,
@@ -1332,6 +1555,13 @@ private fun NarrowMessages(
                 allowTopicSuggestions = true,
                 pendingInsertionText = pendingMentionText,
                 onPendingInsertionConsumed = { pendingMentionText = null },
+                onInputFocused = {
+                    if (uiState.messages.isNotEmpty()) {
+                        coroutineScope.launch {
+                            lazyListState.animateScrollToItem(uiState.messages.lastIndex)
+                        }
+                    }
+                },
                 onAddAttachment = { attachmentLauncher.launch(arrayOf("*/*")) },
                 onGenerateVideoCall = {
                     val timestamp = System.currentTimeMillis()
@@ -1373,7 +1603,7 @@ private fun NarrowMessages(
                             label = { Text("Kanał") },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = moveStreamMenuExpanded) },
                             modifier = Modifier
-                                .menuAnchor()
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
                                 .fillMaxWidth()
                         )
                         ExposedDropdownMenu(
@@ -1416,7 +1646,7 @@ private fun NarrowMessages(
                             label = { Text("Wątek") },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = moveTopicMenuExpanded) },
                             modifier = Modifier
-                                .menuAnchor()
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
                                 .fillMaxWidth()
                         )
                         ExposedDropdownMenu(
@@ -1480,13 +1710,51 @@ private fun NarrowMessages(
         )
     }
 
+    if (editMessageId != null) {
+        AlertDialog(
+            onDismissRequest = { editMessageId = null },
+            title = { Text("Edytuj wiadomość") },
+            text = {
+                OutlinedTextField(
+                    value = editMessageDraft,
+                    onValueChange = { editMessageDraft = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 3
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val messageId = editMessageId
+                        val trimmed = editMessageDraft.trim()
+                        if (messageId == null) return@Button
+                        if (trimmed.isBlank()) {
+                            Toast.makeText(context, "Treść nie może być pusta", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        onEditMessage(messageId, trimmed)
+                        editMessageId = null
+                    }
+                ) {
+                    Text("Zapisz")
+                }
+            },
+            dismissButton = {
+                Button(onClick = { editMessageId = null }) {
+                    Text("Anuluj")
+                }
+            }
+        )
+    }
+
     emojiPickerMessageId?.let { msgId ->
         EmojiPickerDialog(
-            onEmojiSelected = { emoji ->
-                onAddReaction(msgId, emoji)
+            onEmojiSelected = { reaction ->
+                onAddReaction(msgId, reaction)
                 emojiPickerMessageId = null
             },
-            onDismiss = { emojiPickerMessageId = null }
+            onDismiss = { emojiPickerMessageId = null },
+            customEmojis = customEmojis
         )
     }
 }

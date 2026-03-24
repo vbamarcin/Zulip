@@ -215,6 +215,8 @@ fun ZulipRoot(
                 onSetDirectMessageMuted = viewModel::setDirectMessageMuted,
                 isChannelMuted = viewModel::isChannelMuted,
                 onSetChannelMuted = viewModel::setChannelMuted,
+                isTopicMuted = viewModel::isTopicMuted,
+                onSetTopicMuted = viewModel::setTopicMuted,
                 isChannelDisabled = viewModel::isChannelDisabled,
                 onSetChannelDisabled = viewModel::setChannelDisabled,
                 getMutedChannels = viewModel::getMutedChannels,

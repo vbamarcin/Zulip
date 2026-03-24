@@ -1,8 +1,17 @@
 # Releases
 
-latest_version: 1.7.3
-latest_apk: Zulip-v1.7.3.apk
-latest_url: https://github.com/vbamarcin/Zulip/raw/main/releases/Zulip-v1.7.3.apk
+latest_version: 1.7.5
+latest_apk: Zulip-v1.7.5.apk
+latest_url: https://github.com/vbamarcin/Zulip/raw/main/releases/Zulip-v1.7.5.apk
+
+## v1.7.5
+Zulip-v1.7.5.apk
+
+- Naprawiono układ czatu przy otwarciu klawiatury: pole wpisywania i ostatnia wiadomość pozostają widoczne.
+- Dodano niezawodne przewijanie do najnowszej wiadomości przy fokusie pola wpisywania.
+- Usprawniono obsługę reakcji emoji w kanałach i DM (unicode/custom), w tym zgodność aliasów emoji_name.
+- Dodano lepszą diagnostykę błędów API dla dodawania/usuwania reakcji oraz odświeżanie widoku po sukcesie.
+- Poprawiono kompatybilność realtime event queue dla zdarzeń reaction na różnych wersjach serwera Zulip.
 
 ## v1.7.3
 Zulip-v1.7.3.apk

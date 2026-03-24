@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -91,14 +92,15 @@ fun MessageComposeInput(
     allowTopicSuggestions: Boolean = false,
     pendingInsertionText: String? = null,
     onPendingInsertionConsumed: () -> Unit = {},
+    onInputFocused: () -> Unit = {},
     onAddAttachment: (() -> Unit)? = null,
     onGenerateVideoCall: (() -> Unit)? = null
 ) {
     var text by remember { mutableStateOf("") }
     var selectedSuggestionIndex by remember { mutableStateOf(0) }
-    val cornerRadius = if (compactMode) 16.dp else 18.dp
-    val sendButtonSize = if (compactMode) 36.dp else 40.dp
-    val utilityButtonSize = if (compactMode) 32.dp else 36.dp
+    val cornerRadius = if (compactMode) 14.dp else 16.dp
+    val sendButtonSize = if (compactMode) 34.dp else 38.dp
+    val utilityButtonSize = if (compactMode) 28.dp else 32.dp
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     val baseBodySmall = androidx.compose.material3.MaterialTheme.typography.bodySmall
@@ -166,14 +168,14 @@ fun MessageComposeInput(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 3.dp, vertical = 0.dp)
+            .padding(horizontal = 2.dp, vertical = 0.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(ComposePanelBg, RoundedCornerShape(cornerRadius))
                 .border(1.dp, ComposePanelBorder, RoundedCornerShape(cornerRadius))
-                .padding(horizontal = 3.dp, vertical = 2.dp)
+                .padding(horizontal = 2.dp, vertical = 1.dp)
         ) {
             if ((mentionQuery != null || topicQuery != null) && suggestions.isNotEmpty()) {
                 Surface(
@@ -239,6 +241,11 @@ fun MessageComposeInput(
                     onValueChange = { text = it },
                     modifier = Modifier
                         .weight(1f)
+                        .onFocusChanged { focusState ->
+                            if (focusState.isFocused) {
+                                onInputFocused()
+                            }
+                        }
                         .onPreviewKeyEvent { keyEvent ->
                             if (keyEvent.type != KeyEventType.KeyDown || suggestions.isEmpty()) {
                                 return@onPreviewKeyEvent false
@@ -279,7 +286,7 @@ fun MessageComposeInput(
                         }
                     ),
                     colors = textFieldColors,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(11.dp),
                     singleLine = false,
                     maxLines = 3,
                     enabled = enabled
@@ -290,7 +297,7 @@ fun MessageComposeInput(
                         enabled = enabled,
                         modifier = Modifier.size(utilityButtonSize)
                     ) {
-                        Icon(Icons.Rounded.AttachFile, contentDescription = "Załącz", tint = ComposeActionTint, modifier = Modifier.size(15.dp))
+                        Icon(Icons.Rounded.AttachFile, contentDescription = "Załącz", tint = ComposeActionTint, modifier = Modifier.size(14.dp))
                     }
                 }
                 if (onGenerateVideoCall != null) {
@@ -299,7 +306,7 @@ fun MessageComposeInput(
                         enabled = enabled,
                         modifier = Modifier.size(utilityButtonSize)
                     ) {
-                        Icon(Icons.Rounded.Videocam, contentDescription = "Video", tint = ComposeActionTint, modifier = Modifier.size(15.dp))
+                        Icon(Icons.Rounded.Videocam, contentDescription = "Video", tint = ComposeActionTint, modifier = Modifier.size(14.dp))
                     }
                 }
                 IconButton(
@@ -316,7 +323,7 @@ fun MessageComposeInput(
                         Icons.AutoMirrored.Rounded.Send,
                         contentDescription = "Wyślij",
                         tint = if (text.isNotBlank() && enabled) ComposeSendEnabled else ComposeSendDisabled,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(15.dp)
                     )
                 }
             }
@@ -515,11 +522,12 @@ private fun SuggestionLeading(
 
 @Composable
 fun MessageActionsRow(
-    onReaction: (String) -> Unit,
+    onReaction: (EmojiHelper.ReactionSelection) -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     compactMode: Boolean,
-    alignEnd: Boolean = false
+    alignEnd: Boolean = false,
+    customEmojis: List<EmojiHelper.CustomEmojiItem> = emptyList()
 ) {
     var showEmojiPicker by remember { mutableStateOf(false) }
     val containerPadding = if (compactMode) 4.dp else 6.dp
@@ -552,19 +560,21 @@ fun MessageActionsRow(
 
     if (showEmojiPicker) {
         EmojiPickerDialog(
-            onEmojiSelected = { emoji ->
-                onReaction(emoji)
+            onEmojiSelected = { reaction ->
+                onReaction(reaction)
                 showEmojiPicker = false
             },
-            onDismiss = { showEmojiPicker = false }
+            onDismiss = { showEmojiPicker = false },
+            customEmojis = customEmojis
         )
     }
 }
 
 @Composable
 fun EmojiPickerDialog(
-    onEmojiSelected: (String) -> Unit,
-    onDismiss: () -> Unit
+    onEmojiSelected: (EmojiHelper.ReactionSelection) -> Unit,
+    onDismiss: () -> Unit,
+    customEmojis: List<EmojiHelper.CustomEmojiItem> = emptyList()
 ) {
     Dialog(
         onDismissRequest = onDismiss,
@@ -586,10 +596,42 @@ fun EmojiPickerDialog(
                 ) {
                     items(EmojiHelper.COMMON_EMOJIS) { (emoji, name) ->
                         Button(
-                            onClick = { onEmojiSelected(name) },
+                            onClick = {
+                                onEmojiSelected(
+                                    EmojiHelper.ReactionSelection(
+                                        name = name,
+                                        code = EmojiHelper.encodeUnicodeEmoji(emoji),
+                                        type = "unicode_emoji"
+                                    )
+                                )
+                            },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2A4B6E))
                         ) {
                             Text(emoji, modifier = Modifier.padding(8.dp))
+                        }
+                    }
+                    items(customEmojis.sortedBy { it.name.lowercase() }) { item ->
+                        Button(
+                            onClick = {
+                                onEmojiSelected(
+                                    EmojiHelper.ReactionSelection(
+                                        name = item.name,
+                                        code = item.id,
+                                        type = "realm_emoji"
+                                    )
+                                )
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2A4B6E))
+                        ) {
+                            if (item.url.isNotBlank()) {
+                                AsyncImage(
+                                    model = item.url,
+                                    contentDescription = item.name,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            } else {
+                                Text(":${item.name}:", modifier = Modifier.padding(8.dp))
+                            }
                         }
                     }
                 }

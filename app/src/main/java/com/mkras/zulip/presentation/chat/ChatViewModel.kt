@@ -50,9 +50,57 @@ class ChatViewModel @Inject constructor(
         observeTypingEvents()
         observePresenceEvents()
         ensureMentionCandidatesLoaded()
+        loadCurrentUserId()
+        loadCustomEmojis()
         loadModerationPermission()
         initialPresenceSync()
         resyncOnResume()
+    }
+
+    private fun loadCurrentUserId() {
+        viewModelScope.launch {
+            chatRepository.getCurrentUserId()
+                .onSuccess { userId ->
+                    _uiState.update { it.copy(currentUserId = userId) }
+                }
+                .onFailure {
+                    _uiState.update { it.copy(currentUserId = null) }
+                }
+        }
+    }
+
+    private fun loadCustomEmojis() {
+        viewModelScope.launch {
+            chatRepository.getCustomEmojis()
+                .onSuccess { emojis ->
+                    val active = emojis.filter { !it.isDeactivated }
+                    val byId = active.associate { it.id to it.url }
+                    val byName = active.associate { it.name.lowercase() to it.url }
+                    val items = active.map { emoji ->
+                        EmojiHelper.CustomEmojiItem(
+                            id = emoji.id,
+                            name = emoji.name,
+                            url = emoji.url
+                        )
+                    }
+                    _uiState.update {
+                        it.copy(
+                            customEmojiById = byId,
+                            customEmojiByName = byName,
+                            customEmojis = items
+                        )
+                    }
+                }
+                .onFailure {
+                    _uiState.update {
+                        it.copy(
+                            customEmojiById = emptyMap(),
+                            customEmojiByName = emptyMap(),
+                            customEmojis = emptyList()
+                        )
+                    }
+                }
+        }
     }
 
     private fun initialPresenceSync() {
@@ -60,7 +108,14 @@ class ChatViewModel @Inject constructor(
             chatRepository.getPresence()
                 .onSuccess { presences ->
                     Log.d(TAG, "initialPresenceSync success: mapped_count=${presences.size}")
-                    _uiState.update { it.copy(presenceByEmail = presences) }
+                    val ownEmail = currentUserEmail.trim().lowercase()
+                    val ownStatus = if (ownEmail.isNotBlank()) presences[ownEmail] else null
+                    _uiState.update {
+                        it.copy(
+                            presenceByEmail = presences,
+                            ownPresenceStatus = ownStatus ?: it.ownPresenceStatus
+                        )
+                    }
                 }
                 .onFailure { error ->
                     Log.e(TAG, "initialPresenceSync failed", error)
@@ -359,11 +414,70 @@ class ChatViewModel @Inject constructor(
                         if (normalizedStatus == "offline") updated.remove(email)
                         else updated[email] = normalizedStatus
                         Log.d(TAG, "presence update: email=$email, status=$normalizedStatus, total=${updated.size}")
-                        state.copy(presenceByEmail = updated)
+                        val ownEmail = currentUserEmail.trim().lowercase()
+                        val nextOwnStatus = if (email == ownEmail && normalizedStatus != "offline") {
+                            normalizedStatus
+                        } else {
+                            state.ownPresenceStatus
+                        }
+                        state.copy(
+                            presenceByEmail = updated,
+                            ownPresenceStatus = nextOwnStatus
+                        )
                     }
                 }
             }
         }
+    }
+
+    fun setOwnPresence(status: String) {
+        val normalizedStatus = when (status.trim().lowercase()) {
+            "active", "online" -> "active"
+            "idle", "away" -> "idle"
+            else -> return
+        }
+
+        _uiState.update {
+            it.copy(
+                isUpdatingOwnPresence = true,
+                ownPresenceUpdateMessage = null
+            )
+        }
+
+        viewModelScope.launch {
+            chatRepository.setOwnPresence(normalizedStatus)
+                .onSuccess {
+                    val ownEmail = currentUserEmail.trim().lowercase()
+                    _uiState.update { state ->
+                        val updatedPresence = state.presenceByEmail.toMutableMap()
+                        if (ownEmail.isNotBlank()) {
+                            updatedPresence[ownEmail] = normalizedStatus
+                        }
+                        state.copy(
+                            presenceByEmail = updatedPresence,
+                            ownPresenceStatus = normalizedStatus,
+                            isUpdatingOwnPresence = false,
+                            ownPresenceUpdateMessage = if (normalizedStatus == "active") {
+                                "Status ustawiony: Aktywny"
+                            } else {
+                                "Status ustawiony: Zaraz wracam"
+                            }
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    _uiState.update {
+                        it.copy(
+                            isUpdatingOwnPresence = false,
+                            ownPresenceUpdateMessage = error.message ?: "Nie udało się zmienić statusu"
+                        )
+                    }
+                }
+        }
+    }
+
+    fun clearOwnPresenceMessage() {
+        _uiState.update { it.copy(ownPresenceUpdateMessage = null) }
     }
 
     private fun observeTypingEvents() {
@@ -459,17 +573,27 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    fun addReaction(messageId: Long, emojiName: String, onSuccess: () -> Unit = {}, onError: (String) -> Unit = {}) {
+    fun addReaction(
+        messageId: Long,
+        reaction: EmojiHelper.ReactionSelection,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
         viewModelScope.launch {
-            chatRepository.addReaction(messageId, emojiName)
+            chatRepository.addReaction(messageId, reaction.name, reaction.code, reaction.type)
                 .onSuccess { onSuccess() }
                 .onFailure { error -> onError(error.message ?: "Failed to add reaction") }
         }
     }
 
-    fun removeReaction(messageId: Long, emojiName: String, onSuccess: () -> Unit = {}, onError: (String) -> Unit = {}) {
+    fun removeReaction(
+        messageId: Long,
+        reaction: EmojiHelper.ReactionSelection,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
         viewModelScope.launch {
-            chatRepository.removeReaction(messageId, emojiName)
+            chatRepository.removeReaction(messageId, reaction.name, reaction.code, reaction.type)
                 .onSuccess { onSuccess() }
                 .onFailure { error -> onError(error.message ?: "Failed to remove reaction") }
         }
@@ -604,5 +728,12 @@ data class ChatUiState(
     val canModerateAllMessages: Boolean = false,
     val presenceByEmail: Map<String, String> = emptyMap(),
     val starredMessages: List<MessageEntity> = emptyList(),
-    val dmScrollPosition: Map<String, Int> = emptyMap()
+    val dmScrollPosition: Map<String, Int> = emptyMap(),
+    val currentUserId: Long? = null,
+    val ownPresenceStatus: String = "active",
+    val isUpdatingOwnPresence: Boolean = false,
+    val ownPresenceUpdateMessage: String? = null,
+    val customEmojiById: Map<String, String> = emptyMap(),
+    val customEmojiByName: Map<String, String> = emptyMap(),
+    val customEmojis: List<EmojiHelper.CustomEmojiItem> = emptyList()
 )

@@ -8,6 +8,7 @@ import com.mkras.zulip.data.local.db.StreamDao
 import com.mkras.zulip.data.local.entity.MessageEntity
 import com.mkras.zulip.data.remote.dto.EventDto
 import com.mkras.zulip.data.remote.dto.EventMessageDto
+import com.mkras.zulip.data.remote.dto.MessageReactionDto
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -122,11 +123,15 @@ class EventProcessor @Inject constructor(
         val recipients = if (isPrivate) parsePrivateRecipients(message.displayRecipient) else emptyList()
         val conversationKey = if (isPrivate) DmConversationKey.fromRecipientMaps(recipients, message.senderEmail.orEmpty(), selfEmail) else ""
         val streamName = if (!isPrivate) message.displayRecipient?.toString().orEmpty().trim() else ""
+        val topicName = message.subject.orEmpty()
         val isRead = message.flags?.contains("read") == true
         val isDisabledStream = !isPrivate && streamName.isNotBlank() && secureSessionStorage.isChannelDisabled(streamName)
         if (isDisabledStream) {
             return
         }
+
+        val isMutedTopic = !isPrivate && streamName.isNotBlank() && topicName.isNotBlank() &&
+            secureSessionStorage.isTopicMuted(streamName, topicName)
 
         val serverNotificationsEnabled = secureSessionStorage.getServerNotificationsEnabled()
 
@@ -148,7 +153,7 @@ class EventProcessor @Inject constructor(
         }
 
         val isMutedDirectMessage = isPrivate && secureSessionStorage.isDirectMessageMuted(conversationKey)
-        val isMutedStream = !isPrivate && (streamInfo?.isMuted == true)
+        val isMutedStream = !isPrivate && ((streamInfo?.isMuted == true) || secureSessionStorage.isChannelMuted(streamName))
         val desktopNotificationsEnabled = streamInfo?.desktopNotifications ?: true
         val isMentioned = message.flags?.contains("mentioned") == true ||
             message.flags?.contains("wildcard_mentioned") == true
@@ -158,6 +163,7 @@ class EventProcessor @Inject constructor(
             serverNotificationsEnabled &&
                 !isRead &&
                 !isMutedStream &&
+                !isMutedTopic &&
                 channelNotificationsEnabled &&
                 isSubscribedStream &&
                 (isMentioned || desktopNotificationsEnabled)
@@ -177,11 +183,11 @@ class EventProcessor @Inject constructor(
                 isStarred = message.flags?.contains("starred") == true,
                 isMentioned = message.flags?.contains("mentioned") == true,
                 isWildcardMentioned = message.flags?.contains("wildcard_mentioned") == true,
-                reactionSummary = null,
                 avatarUrl = resolveAvatarUrl(message.avatarUrl.orEmpty(), serverUrl),
                 messageType = msgType,
                 conversationKey = if (msgType == "private") conversationKey else "",
-                dmDisplayName = if (msgType == "private") buildDmDisplayName(recipients, selfEmail, message.senderFullName.orEmpty()) else ""
+                dmDisplayName = if (msgType == "private") buildDmDisplayName(recipients, selfEmail, message.senderFullName.orEmpty()) else "",
+                reactionSummary = buildReactionSummary(message.reactions)
             )
         )
 
@@ -269,26 +275,78 @@ class EventProcessor @Inject constructor(
         val messageId = event.messageId ?: return
         val emojiName = event.emojiName?.takeIf { it.isNotBlank() } ?: return
         val op = event.op ?: return
+        val emojiCode = event.emojiCode?.takeIf { it.isNotBlank() }
+        val reactionType = event.reactionType?.takeIf { it.isNotBlank() }
+        val userId = event.userId
 
         val existing = messageDao.getReactionSummary(messageId)
-        val reactions = if (existing.isNullOrBlank()) {
-            mutableListOf()
-        } else {
-            existing.split("|").filter { it.isNotBlank() }.toMutableList()
-        }
+        val reactions = decodeReactionTokens(existing).toMutableList()
 
         if (op == "add") {
-            if (!reactions.contains(emojiName)) {
-                reactions.add(emojiName)
-            }
+            reactions.add(ReactionToken(name = emojiName, code = emojiCode, type = reactionType, userId = userId))
         } else if (op == "remove") {
-            reactions.remove(emojiName)
+            val index = reactions.indexOfFirst {
+                it.name == emojiName &&
+                    (emojiCode == null || it.code == emojiCode) &&
+                    (reactionType == null || it.type == reactionType) &&
+                    (userId == null || it.userId == userId)
+            }.takeIf { it >= 0 } ?: reactions.indexOfFirst { it.name == emojiName }
+            if (index >= 0) {
+                reactions.removeAt(index)
+            }
         }
 
         messageDao.updateReactionSummary(
             messageId = messageId,
-            summary = reactions.joinToString("|").ifBlank { null }
+            summary = reactions.joinToString("|") { encodeReactionToken(it) }.ifBlank { null }
         )
+    }
+
+    private data class ReactionToken(
+        val name: String,
+        val code: String?,
+        val type: String?,
+        val userId: Long?
+    )
+
+    private fun decodeReactionTokens(summary: String?): List<ReactionToken> {
+        if (summary.isNullOrBlank()) return emptyList()
+        return summary.split("|")
+            .mapNotNull { raw ->
+                val token = raw.trim()
+                if (token.isBlank()) return@mapNotNull null
+                val parts = token.split("::")
+                if (parts.size >= 3) {
+                    ReactionToken(
+                        name = parts[0].trim(),
+                        code = parts[1].trim().ifBlank { null },
+                        type = parts[2].trim().ifBlank { null },
+                        userId = parts.getOrNull(3)?.trim()?.toLongOrNull()
+                    )
+                } else {
+                    ReactionToken(name = token, code = null, type = null, userId = null)
+                }
+            }
+            .filter { it.name.isNotBlank() }
+    }
+
+    private fun encodeReactionToken(token: ReactionToken): String {
+        val safeName = token.name.replace("::", ":")
+        val safeCode = token.code?.replace("::", ":").orEmpty()
+        val safeType = token.type?.replace("::", ":").orEmpty()
+        val safeUserId = token.userId?.toString().orEmpty()
+        return "$safeName::$safeCode::$safeType::$safeUserId"
+    }
+
+    private fun buildReactionSummary(reactions: List<MessageReactionDto>?): String? {
+        val tokens = reactions
+            ?.mapNotNull { reaction ->
+                val name = reaction.emojiName?.trim().orEmpty()
+                if (name.isBlank()) return@mapNotNull null
+                encodeReactionToken(ReactionToken(name, reaction.emojiCode, reaction.reactionType, reaction.userId))
+            }
+            .orEmpty()
+        return tokens.joinToString("|").ifBlank { null }
     }
 }
 

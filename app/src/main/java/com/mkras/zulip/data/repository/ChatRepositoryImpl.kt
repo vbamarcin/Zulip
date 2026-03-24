@@ -11,6 +11,7 @@ import com.mkras.zulip.data.local.db.StreamDao
 import com.mkras.zulip.data.local.entity.DirectMessageCandidateEntity
 import com.mkras.zulip.data.local.entity.MessageEntity
 import com.mkras.zulip.domain.repository.ChatRepository
+import com.mkras.zulip.domain.repository.CustomEmoji
 import com.mkras.zulip.domain.repository.DirectMessageCandidate
 import com.mkras.zulip.domain.repository.UploadedFile
 import javax.inject.Inject
@@ -114,7 +115,7 @@ class ChatRepositoryImpl @Inject constructor(
                 isStarred = dto.flags?.contains("starred") == true,
                 isMentioned = dto.flags?.contains("mentioned") == true,
                 isWildcardMentioned = dto.flags?.contains("wildcard_mentioned") == true,
-                reactionSummary = null,
+                reactionSummary = buildReactionSummary(dto.reactions),
                 avatarUrl = resolveAvatarUrl(dto.avatarUrl.orEmpty(), serverUrl),
                 messageType = msgType,
                 conversationKey = if (msgType == "private") DmConversationKey.fromRecipientMaps(recipients, dto.senderEmail.orEmpty(), selfEmail) else "",
@@ -166,7 +167,7 @@ class ChatRepositoryImpl @Inject constructor(
                 isStarred = dto.flags?.contains("starred") == true,
                 isMentioned = dto.flags?.contains("mentioned") == true,
                 isWildcardMentioned = dto.flags?.contains("wildcard_mentioned") == true,
-                reactionSummary = null,
+                reactionSummary = buildReactionSummary(dto.reactions),
                 avatarUrl = resolveAvatarUrl(dto.avatarUrl.orEmpty(), serverUrl),
                 messageType = msgType,
                 conversationKey = if (msgType == "private") DmConversationKey.fromRecipientMaps(recipients, dto.senderEmail.orEmpty(), selfEmail) else "",
@@ -214,7 +215,7 @@ class ChatRepositoryImpl @Inject constructor(
                 isStarred = dto.flags?.contains("starred") == true,
                 isMentioned = dto.flags?.contains("mentioned") == true,
                 isWildcardMentioned = dto.flags?.contains("wildcard_mentioned") == true,
-                reactionSummary = null,
+                reactionSummary = buildReactionSummary(dto.reactions),
                 avatarUrl = resolveAvatarUrl(dto.avatarUrl.orEmpty(), auth.serverUrl),
                 messageType = "stream",
                 conversationKey = "",
@@ -263,7 +264,7 @@ class ChatRepositoryImpl @Inject constructor(
                     isStarred = dto.flags?.contains("starred") == true,
                     isMentioned = dto.flags?.contains("mentioned") == true,
                     isWildcardMentioned = dto.flags?.contains("wildcard_mentioned") == true,
-                    reactionSummary = null,
+                    reactionSummary = buildReactionSummary(dto.reactions),
                     avatarUrl = resolveAvatarUrl(dto.avatarUrl.orEmpty(), auth.serverUrl),
                     messageType = "stream",
                     conversationKey = "",
@@ -322,7 +323,7 @@ class ChatRepositoryImpl @Inject constructor(
                     isStarred = dto.flags?.contains("starred") == true,
                     isMentioned = dto.flags?.contains("mentioned") == true,
                     isWildcardMentioned = dto.flags?.contains("wildcard_mentioned") == true,
-                    reactionSummary = null,
+                    reactionSummary = buildReactionSummary(dto.reactions),
                     avatarUrl = resolveAvatarUrl(dto.avatarUrl.orEmpty(), auth.serverUrl),
                     messageType = "stream",
                     conversationKey = "",
@@ -353,6 +354,78 @@ class ChatRepositoryImpl @Inject constructor(
     private fun resolveAvatarUrl(raw: String, serverUrl: String): String {
         if (raw.isBlank()) return ""
         return if (raw.startsWith("http")) raw else "${serverUrl.trimEnd('/')}$raw"
+    }
+
+    private fun buildReactionSummary(reactions: List<com.mkras.zulip.data.remote.dto.MessageReactionDto>?): String? {
+        val tokens = reactions
+            ?.mapNotNull { reaction ->
+                val name = reaction.emojiName?.trim().orEmpty()
+                if (name.isBlank()) return@mapNotNull null
+                encodeReactionToken(name, reaction.emojiCode, reaction.reactionType, reaction.userId)
+            }
+            .orEmpty()
+        return tokens.joinToString("|").ifBlank { null }
+    }
+
+    private fun encodeReactionToken(name: String, code: String?, type: String?, userId: Long?): String {
+        val safeName = name.replace("::", ":")
+        val safeCode = code?.replace("::", ":").orEmpty()
+        val safeType = type?.replace("::", ":").orEmpty()
+        val safeUserId = userId?.toString().orEmpty()
+        return "$safeName::$safeCode::$safeType::$safeUserId"
+    }
+
+    private fun extractApiErrorMessage(exception: HttpException): String {
+        val body = runCatching { exception.response()?.errorBody()?.string().orEmpty() }.getOrDefault("")
+        val apiMessage = Regex("\"msg\"\\s*:\\s*\"([^\"]+)\"")
+            .find(body)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.replace("\\\\\"", "\"")
+            ?.trim()
+        return listOfNotNull(apiMessage, "HTTP ${exception.code()}")
+            .joinToString(" ")
+            .ifBlank { "HTTP ${exception.code()}" }
+    }
+
+    private fun unicodeReactionNameCandidates(emojiName: String, emojiCode: String?): List<String> {
+        val normalizedName = emojiName.trim().lowercase()
+        val normalizedCode = emojiCode?.trim()?.lowercase().orEmpty()
+        val candidates = mutableListOf<String>()
+
+        if (emojiName.isNotBlank()) {
+            candidates += emojiName.trim()
+        }
+
+        when (normalizedName) {
+            "+1", "thumbs_up" -> candidates += listOf("thumbs_up", "+1")
+            "-1", "thumbs_down" -> candidates += listOf("thumbs_down", "-1")
+            "joy", "laughing" -> candidates += listOf("joy", "laughing")
+            "open_mouth", "surprised" -> candidates += listOf("open_mouth", "surprised")
+            "cry", "crying" -> candidates += listOf("cry", "crying")
+        }
+
+        when (normalizedCode) {
+            "1f44d" -> candidates += listOf("thumbs_up", "+1")
+            "1f44e" -> candidates += listOf("thumbs_down", "-1")
+            "1f602" -> candidates += listOf("joy", "laughing")
+            "1f62e", "1f62e-fe0f" -> candidates += listOf("open_mouth", "surprised")
+            "1f622" -> candidates += listOf("cry", "crying")
+            "2764", "2764-fe0f" -> candidates += "heart"
+            "1f389" -> candidates += "tada"
+            "1f525" -> candidates += "fire"
+            "1f440" -> candidates += "eyes"
+            "2728" -> candidates += "sparkles"
+            "1f64c" -> candidates += "raised_hands"
+            "1f4af" -> candidates += "100"
+            "1f680" -> candidates += "rocket"
+        }
+
+        return candidates
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .ifEmpty { listOf(emojiName) }
     }
 
     override suspend fun markMessagesAsRead(ids: List<Long>) {
@@ -490,7 +563,12 @@ class ChatRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun addReaction(messageId: Long, emojiName: String): Result<Unit> {
+    override suspend fun addReaction(
+        messageId: Long,
+        emojiName: String,
+        emojiCode: String?,
+        reactionType: String?
+    ): Result<Unit> {
         return try {
             val auth = secureSessionStorage.getAuth() ?: return Result.failure(Exception("Not authenticated"))
             val service = zulipApiFactory.create(
@@ -498,22 +576,45 @@ class ChatRepositoryImpl @Inject constructor(
                 credentials = BasicCredentials(auth.email, auth.apiKey)
             )
 
-            val response = service.addReaction(
-                messageId = messageId,
-                emojiName = emojiName
-            )
-
-            if (response.result == "success") {
-                Result.success(Unit)
+            val resolvedType = reactionType ?: "unicode_emoji"
+            val candidateNames = if (resolvedType == "unicode_emoji") {
+                unicodeReactionNameCandidates(emojiName, emojiCode)
             } else {
-                Result.failure(Exception(response.message))
+                listOf(emojiName)
             }
+
+            var lastError: Throwable? = null
+            for (candidateName in candidateNames) {
+                try {
+                    val response = service.addReaction(
+                        messageId = messageId,
+                        emojiName = candidateName,
+                        emojiCode = emojiCode,
+                        reactionType = resolvedType
+                    )
+
+                    if (response.result == "success") {
+                        return Result.success(Unit)
+                    }
+
+                    lastError = Exception(response.message.ifBlank { "Failed to add reaction" })
+                } catch (e: HttpException) {
+                    lastError = Exception(extractApiErrorMessage(e), e)
+                }
+            }
+
+            Result.failure(lastError ?: Exception("Failed to add reaction"))
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
-    override suspend fun removeReaction(messageId: Long, emojiName: String): Result<Unit> {
+    override suspend fun removeReaction(
+        messageId: Long,
+        emojiName: String,
+        emojiCode: String?,
+        reactionType: String?
+    ): Result<Unit> {
         return try {
             val auth = secureSessionStorage.getAuth() ?: return Result.failure(Exception("Not authenticated"))
             val service = zulipApiFactory.create(
@@ -521,16 +622,34 @@ class ChatRepositoryImpl @Inject constructor(
                 credentials = BasicCredentials(auth.email, auth.apiKey)
             )
 
-            val response = service.removeReaction(
-                messageId = messageId,
-                emojiName = emojiName
-            )
-
-            if (response.result == "success") {
-                Result.success(Unit)
+            val resolvedType = reactionType ?: "unicode_emoji"
+            val candidateNames = if (resolvedType == "unicode_emoji") {
+                unicodeReactionNameCandidates(emojiName, emojiCode)
             } else {
-                Result.failure(Exception(response.message))
+                listOf(emojiName)
             }
+
+            var lastError: Throwable? = null
+            for (candidateName in candidateNames) {
+                try {
+                    val response = service.removeReaction(
+                        messageId = messageId,
+                        emojiName = candidateName,
+                        emojiCode = emojiCode,
+                        reactionType = resolvedType
+                    )
+
+                    if (response.result == "success") {
+                        return Result.success(Unit)
+                    }
+
+                    lastError = Exception(response.message.ifBlank { "Failed to remove reaction" })
+                } catch (e: HttpException) {
+                    lastError = Exception(extractApiErrorMessage(e), e)
+                }
+            }
+
+            Result.failure(lastError ?: Exception("Failed to remove reaction"))
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -619,7 +738,7 @@ class ChatRepositoryImpl @Inject constructor(
                         isStarred = dto.flags?.contains("starred") == true,
                         isMentioned = dto.flags?.contains("mentioned") == true,
                         isWildcardMentioned = dto.flags?.contains("wildcard_mentioned") == true,
-                        reactionSummary = null,
+                        reactionSummary = buildReactionSummary(dto.reactions),
                         avatarUrl = "",
                         messageType = dto.type.orEmpty(),
                         conversationKey = "",
@@ -725,6 +844,50 @@ class ChatRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun setOwnPresence(status: String): Result<Unit> {
+        return try {
+            val auth = secureSessionStorage.getAuth() ?: return Result.failure(Exception("Not authenticated"))
+            val service = zulipApiFactory.create(
+                serverUrl = auth.serverUrl,
+                credentials = BasicCredentials(auth.email, auth.apiKey)
+            )
+
+            val normalizedStatus = when (status.trim().lowercase()) {
+                "active", "online" -> "active"
+                "idle", "away" -> "idle"
+                else -> return Result.failure(Exception("Invalid presence status: $status"))
+            }
+
+            val response = service.setOwnPresence(status = normalizedStatus)
+            if (response.result == "success") {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception(response.message.ifBlank { "Failed to update presence" }))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun getCurrentUserId(): Result<Long> {
+        return try {
+            val auth = secureSessionStorage.getAuth() ?: return Result.failure(Exception("Not authenticated"))
+            val service = zulipApiFactory.create(
+                serverUrl = auth.serverUrl,
+                credentials = BasicCredentials(auth.email, auth.apiKey)
+            )
+
+            val response = service.getMyProfile()
+            if (response.result == "success" && response.userId != null) {
+                Result.success(response.userId)
+            } else {
+                Result.failure(Exception(response.message.ifBlank { "Failed to fetch current user id" }))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     override suspend fun canModerateAllMessages(): Result<Boolean> {
         return try {
             val auth = secureSessionStorage.getAuth() ?: return Result.failure(Exception("Not authenticated"))
@@ -743,6 +906,40 @@ class ChatRepositoryImpl @Inject constructor(
             } else {
                 Result.failure(Exception(response.message.ifBlank { "Failed to fetch profile permissions" }))
             }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun getCustomEmojis(): Result<List<CustomEmoji>> {
+        return try {
+            val auth = secureSessionStorage.getAuth() ?: return Result.failure(Exception("Not authenticated"))
+            val service = zulipApiFactory.create(
+                serverUrl = auth.serverUrl,
+                credentials = BasicCredentials(auth.email, auth.apiKey)
+            )
+
+            val response = service.getRealmEmoji()
+            if (response.result != "success") {
+                return Result.failure(Exception(response.message.ifBlank { "Failed to load custom emoji" }))
+            }
+
+            val serverUrl = auth.serverUrl.trimEnd('/')
+            val items = response.emoji.mapNotNull { (key, dto) ->
+                val name = dto.name?.trim().takeIf { !it.isNullOrBlank() } ?: key.trim()
+                val id = dto.id?.trim().takeIf { !it.isNullOrBlank() } ?: name
+                val rawUrl = dto.sourceUrl?.trim().orEmpty()
+                if (name.isBlank() || rawUrl.isBlank()) return@mapNotNull null
+                val resolvedUrl = if (rawUrl.startsWith("http", ignoreCase = true)) rawUrl else "$serverUrl$rawUrl"
+                CustomEmoji(
+                    id = id,
+                    name = name,
+                    url = resolvedUrl,
+                    isDeactivated = dto.deactivated == true
+                )
+            }
+
+            Result.success(items)
         } catch (e: Exception) {
             Result.failure(e)
         }

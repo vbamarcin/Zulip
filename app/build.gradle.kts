@@ -6,6 +6,31 @@ plugins {
     id("com.google.dagger.hilt.android")
 }
 
+import java.util.Properties
+
+val localProps = Properties().apply {
+    val localFile = rootProject.file("local.properties")
+    if (localFile.exists()) {
+        localFile.inputStream().use { load(it) }
+    }
+}
+
+fun resolveSecret(name: String): String? {
+    return providers.gradleProperty(name).orNull
+        ?: System.getenv(name)
+        ?: localProps.getProperty(name)
+}
+
+val releaseStoreFile = resolveSecret("RELEASE_STORE_FILE")
+val releaseStorePassword = resolveSecret("RELEASE_STORE_PASSWORD")
+val releaseKeyAlias = resolveSecret("RELEASE_KEY_ALIAS")
+val releaseKeyPassword = resolveSecret("RELEASE_KEY_PASSWORD")
+val hasReleaseSigning = !releaseStoreFile.isNullOrBlank() &&
+    !releaseStorePassword.isNullOrBlank() &&
+    !releaseKeyAlias.isNullOrBlank() &&
+    !releaseKeyPassword.isNullOrBlank() &&
+    file(releaseStoreFile).exists()
+
 android {
     namespace = "com.mkras.zulip"
     compileSdk = 35
@@ -14,8 +39,8 @@ android {
         applicationId = "com.mkras.zulip"
         minSdk = 28
         targetSdk = 35
-        versionCode = 40
-        versionName = "1.7.3"
+        versionCode = 42
+        versionName = "1.7.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -25,17 +50,24 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
+            if (hasReleaseSigning) {
+                storeFile = file(releaseStoreFile!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
         }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = if (hasReleaseSigning) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -92,6 +124,7 @@ dependencies {
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.retrofit2:converter-moshi:2.11.0")
     implementation("com.squareup.moshi:moshi-kotlin:1.15.2")
+    ksp("com.squareup.moshi:moshi-kotlin-codegen:1.15.2")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 
@@ -112,6 +145,9 @@ dependencies {
     implementation("io.noties.markwon:ext-tables:4.6.2")
     implementation("io.noties.markwon:image:4.6.2")
     implementation("io.noties.markwon:image-coil:4.6.2")
+    implementation("com.caverock:androidsvg:1.4")
+    implementation("com.atlassian.commonmark:commonmark-ext-gfm-strikethrough:0.13.0")
+    implementation("pl.droidsonroids.gif:android-gif-drawable:1.2.29")
 
     implementation("io.coil-kt:coil-compose:2.7.0")
 

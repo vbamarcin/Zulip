@@ -29,6 +29,10 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -42,8 +46,10 @@ import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.NotificationsOff
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -51,6 +57,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -143,15 +150,20 @@ fun ChatScreen(
     onSetDirectMessageMuted: (String, Boolean) -> Unit = { _, _ -> },
     onScrollConsumed: () -> Unit = {},
     onSendMessage: (String, String, String, String?) -> Unit = { _, _, _, _ -> },
-    onAddReaction: (Long, String) -> Unit = { _, _ -> },
-    onEditMessage: (Long) -> Unit = { _ -> },
+    onAddReaction: (Long, EmojiHelper.ReactionSelection) -> Unit = { _, _ -> },
+    onRemoveReaction: (Long, EmojiHelper.ReactionSelection) -> Unit = { _, _ -> },
+    onEditMessage: (Long, String) -> Unit = { _, _ -> },
     onDeleteMessage: (Long) -> Unit = { _ -> },
     pendingDirectMessageContent: String? = null,
     onPendingDirectMessageContentConsumed: () -> Unit = {},
     canModerateAllMessages: Boolean = false,
+    currentUserId: Long? = null,
     typingText: String? = null,
     onAttachmentOperationStart: () -> Unit = {},
-    onAttachmentOperationEnd: () -> Unit = {}
+    onAttachmentOperationEnd: () -> Unit = {},
+    customEmojiById: Map<String, String> = emptyMap(),
+    customEmojiByName: Map<String, String> = emptyMap(),
+    customEmojis: List<EmojiHelper.CustomEmojiItem> = emptyList()
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -198,6 +210,7 @@ fun ChatScreen(
             currentUserEmail = currentUserEmail,
             typingText = typingText
         )
+
     } else {
         val thread = remember(uiState.privateMessages, selectedKey) {
             uiState.privateMessages.filter { it.conversationKey == selectedKey }
@@ -225,18 +238,23 @@ fun ChatScreen(
             onUploadAttachmentMessage = onUploadAttachmentMessage,
             onSendMessage = onSendMessage,
             onAddReaction = onAddReaction,
+            onRemoveReaction = onRemoveReaction,
             onEditMessage = onEditMessage,
             onDeleteMessage = onDeleteMessage,
             pendingDirectMessageContent = pendingDirectMessageContent,
             onPendingDirectMessageContentConsumed = onPendingDirectMessageContentConsumed,
             canModerateAllMessages = canModerateAllMessages,
+            currentUserId = currentUserId,
             onAttachmentOperationStart = onAttachmentOperationStart,
             onAttachmentOperationEnd = onAttachmentOperationEnd,
             sendMessageError = uiState.sendMessageError,
             resyncError = uiState.resyncError,
             onClearSendError = { /* Will be connected in ZulipHomeScreen */ },
             onClearResyncError = { /* Will be connected in ZulipHomeScreen */ },
-            onSaveDmScrollPosition = { key, index -> /* Will be connected in ZulipHomeScreen */ }
+            onSaveDmScrollPosition = { key, index -> /* Will be connected in ZulipHomeScreen */ },
+            customEmojiById = customEmojiById,
+            customEmojiByName = customEmojiByName,
+            customEmojis = customEmojis
         )
     }
 }
@@ -326,83 +344,84 @@ private fun DmConversationList(
                         ),
                         label = "typing_alpha"
                     )
-                                Surface(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { onSelect(conv.conversationKey) },
-                                    shape = RoundedCornerShape(if (compactMode) 20.dp else 24.dp),
-                                    color = CardBg,
-                                    border = BorderStroke(1.dp, BubbleOutline)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = cardHorizontal, vertical = cardVertical),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Box(
-                                            contentAlignment = Alignment.BottomEnd,
-                                            modifier = Modifier.then(
-                                                if (isTyping) {
-                                                    Modifier.border(
-                                                        width = 2.dp,
-                                                        color = Color(0xFF8CD9FF).copy(alpha = typingBorderAlpha),
-                                                        shape = CircleShape
-                                                    )
-                                                } else {
-                                                    Modifier
-                                                }
-                                            )
-                                        ) {
-                                            AvatarImage(
-                                                avatarUrl = conv.avatarUrl,
-                                                initials = conv.displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-                                                size = avatarSize
-                                            )
-                                            if (presenceStatus != null) {
-                                                val dotColor = when (presenceStatus) {
-                                                    "active" -> Color(0xFF43D87A)
-                                                    "idle" -> Color(0xFFF5C543)
-                                                    else -> Color(0xFF6B7280)
-                                                }
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(10.dp)
-                                                        .background(dotColor, CircleShape)
-                                                        .border(1.5.dp, CardBg, CircleShape)
-                                                )
-                                            }
-                                        }
-                                        Column(
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .padding(start = if (compactMode) 10.dp else 12.dp)
-                                        ) {
-                                            Text(
-                                                text = conv.displayName,
-                                                style = textStyle,
-                                                fontWeight = FontWeight.Bold,
-                                                color = NameColor,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                            Text(
-                                                text = if (conv.unreadCount > 0) "Nowe wiadomości: ${conv.unreadCount}" else "Otwórz konwersację",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = SubtleColor
-                                            )
-                                        }
-                                        if (conv.unreadCount > 0) {
-                                            Badge(containerColor = Color(0xFF8A3B2E)) {
-                                                Text(
-                                                    text = conv.unreadCount.toString(),
-                                                    color = Color.White
-                                                )
-                                            }
-                                        }
+
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(conv.conversationKey) },
+                        shape = RoundedCornerShape(if (compactMode) 20.dp else 24.dp),
+                        color = CardBg,
+                        border = BorderStroke(1.dp, BubbleOutline)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = cardHorizontal, vertical = cardVertical),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                contentAlignment = Alignment.BottomEnd,
+                                modifier = Modifier.then(
+                                    if (isTyping) {
+                                        Modifier.border(
+                                            width = 2.dp,
+                                            color = Color(0xFF8CD9FF).copy(alpha = typingBorderAlpha),
+                                            shape = CircleShape
+                                        )
+                                    } else {
+                                        Modifier
                                     }
+                                )
+                            ) {
+                                AvatarImage(
+                                    avatarUrl = conv.avatarUrl,
+                                    initials = conv.displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                                    size = avatarSize
+                                )
+                                if (presenceStatus != null) {
+                                    val dotColor = when (presenceStatus) {
+                                        "active" -> Color(0xFF43D87A)
+                                        "idle" -> Color(0xFFF5C543)
+                                        else -> Color(0xFF6B7280)
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .size(10.dp)
+                                            .background(dotColor, CircleShape)
+                                            .border(1.5.dp, CardBg, CircleShape)
+                                    )
+                                }
+                            }
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(start = if (compactMode) 10.dp else 12.dp)
+                            ) {
+                                Text(
+                                    text = conv.displayName,
+                                    style = textStyle,
+                                    fontWeight = FontWeight.Bold,
+                                    color = NameColor,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = if (conv.unreadCount > 0) "Nowe wiadomości: ${conv.unreadCount}" else "Otwórz konwersację",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = SubtleColor
+                                )
+                            }
+                            if (conv.unreadCount > 0) {
+                                Badge(containerColor = Color(0xFF8A3B2E)) {
+                                    Text(
+                                        text = conv.unreadCount.toString(),
+                                        color = Color.White
+                                    )
                                 }
                             }
                         }
                     }
+                }
+            }
+        }
 
         FloatingActionButton(
             onClick = onOpenNewDmPicker,
@@ -620,7 +639,7 @@ private fun highlightedName(fullName: String, query: String): androidx.compose.u
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 private fun DmThreadView(
     name: String,
@@ -641,19 +660,24 @@ private fun DmThreadView(
     onSetDirectMessageMuted: (String, Boolean) -> Unit = { _, _ -> },
     onUploadAttachmentMessage: UploadAttachmentMessage = { _, _, _, _, onSuccess, _ -> onSuccess() },
     onSendMessage: (String, String, String, String?) -> Unit = { _, _, _, _ -> },
-    onAddReaction: (Long, String) -> Unit = { _, _ -> },
-    onEditMessage: (Long) -> Unit = { _ -> },
+    onAddReaction: (Long, EmojiHelper.ReactionSelection) -> Unit = { _, _ -> },
+    onRemoveReaction: (Long, EmojiHelper.ReactionSelection) -> Unit = { _, _ -> },
+    onEditMessage: (Long, String) -> Unit = { _, _ -> },
     onDeleteMessage: (Long) -> Unit = { _ -> },
     pendingDirectMessageContent: String? = null,
     onPendingDirectMessageContentConsumed: () -> Unit = {},
     canModerateAllMessages: Boolean = false,
+    currentUserId: Long? = null,
     onAttachmentOperationStart: () -> Unit = {},
     onAttachmentOperationEnd: () -> Unit = {},
     sendMessageError: String? = null,
     resyncError: String? = null,
     onClearSendError: () -> Unit = {},
     onClearResyncError: () -> Unit = {},
-    onSaveDmScrollPosition: (String, Int) -> Unit = { _, _ -> }
+    onSaveDmScrollPosition: (String, Int) -> Unit = { _, _ -> },
+    customEmojiById: Map<String, String> = emptyMap(),
+    customEmojiByName: Map<String, String> = emptyMap(),
+    customEmojis: List<EmojiHelper.CustomEmojiItem> = emptyList()
 ) {
     val rowBottom = if (compactMode) 10.dp else 14.dp
     val gap = if (compactMode) 4.dp else 6.dp
@@ -664,6 +688,7 @@ private fun DmThreadView(
     var expandedMenuMessageId by remember { mutableStateOf<Long?>(null) }
     var emojiPickerMessageId by remember { mutableStateOf<Long?>(null) }
     val listState = rememberLazyListState()
+    val isImeVisible = WindowInsets.Companion.isImeVisible
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val showJumpToLatestFab by remember {
@@ -687,6 +712,8 @@ private fun DmThreadView(
     var highlightedMessageId by remember(conversationKey) { mutableStateOf<Long?>(null) }
     var isUploadingAttachment by remember { mutableStateOf(false) }
     var pendingMentionText by remember(conversationKey) { mutableStateOf<String?>(null) }
+    var editingMessageId by remember { mutableStateOf<Long?>(null) }
+    var editingMessageDraft by remember { mutableStateOf("") }
     var isCurrentDirectMessageMuted by remember(conversationKey) {
         mutableStateOf(isDirectMessageMuted(conversationKey))
     }
@@ -748,7 +775,17 @@ private fun DmThreadView(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    LaunchedEffect(isImeVisible, conversationKey, messages.lastOrNull()?.id) {
+        if (isImeVisible && messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.lastIndex)
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .imePadding()
+    ) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(if (compactMode) 18.dp else 22.dp),
@@ -806,16 +843,36 @@ private fun DmThreadView(
                 val imageUrl = remember(message.id, serverUrl) {
                     firstImageUrl(message.content, serverUrl)
                 }
+                val plainContent = remember(message.id, message.content) {
+                    message.content
+                        .replace(Regex("<[^>]*>"), "")
+                        .replace(Regex("!\\[[^\\]]*]\\(([^)]+)\\)"), "")
+                        .replace(Regex("\\[([^\\]]+)]\\(([^)]+)\\)"), "$1")
+                        .trim()
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
                     horizontalArrangement = if (isOwnMessage) Arrangement.End else Arrangement.Start,
                     verticalAlignment = Alignment.Bottom
                 ) {
                     if (!isOwnMessage) {
-                        Box(modifier = Modifier.clickable {
-                            pendingMentionText = "@**${message.senderFullName}**"
-                        }) {
-                            AvatarImage(avatarUrl = message.avatarUrl, initials = avatarInitials, size = avatarSize)
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Box(modifier = Modifier.clickable {
+                                expandedMenuMessageId = message.id
+                            }) {
+                                AvatarImage(avatarUrl = message.avatarUrl, initials = avatarInitials, size = avatarSize)
+                            }
+                            IconButton(
+                                onClick = { expandedMenuMessageId = message.id },
+                                modifier = Modifier.size(26.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.MoreVert,
+                                    contentDescription = "Menu wiadomości",
+                                    tint = Color(0xFF8CD9FF),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
                         }
                         Spacer(modifier = Modifier.size(6.dp))
                     }
@@ -830,16 +887,48 @@ private fun DmThreadView(
                             compactMode = compactMode,
                             senderStyle = senderStyle,
                             onLongClick = { expandedMenuMessageId = message.id },
-                            onEditMessage = onEditMessage,
-                            onDeleteMessage = onDeleteMessage,
-                            onAddReaction = { emoji -> onAddReaction(message.id, emoji) },
+                            onEditMessage = {
+                                editingMessageId = message.id
+                                editingMessageDraft = plainContent
+                            },
+                            onDeleteMessage = { onDeleteMessage(message.id) },
+                            onAddReaction = { reaction -> onAddReaction(message.id, reaction) },
+                            onToggleReaction = { reaction, reactedByCurrentUser ->
+                                if (reactedByCurrentUser) onRemoveReaction(message.id, reaction)
+                                else onAddReaction(message.id, reaction)
+                            },
                             onMentionRequest = { pendingMentionText = "@**${message.senderFullName}**" },
+                            onQuoteRequest = {
+                                val quoteBlock = plainContent.lines()
+                                    .filter { it.isNotBlank() }
+                                    .joinToString("\n") { "> $it" }
+                                if (quoteBlock.isNotBlank()) {
+                                    pendingMentionText = "$quoteBlock\n\n"
+                                }
+                            },
                             expandedMenuMessageId = expandedMenuMessageId,
                             onMenuDismiss = { expandedMenuMessageId = null },
-                            onEmojiPickerOpen = { emojiPickerMessageId = message.id }
+                            onEmojiPickerOpen = { emojiPickerMessageId = message.id },
+                            currentUserId = currentUserId,
+                            customEmojiById = customEmojiById,
+                            customEmojiByName = customEmojiByName
                         )
                     }
-                    if (!isOwnMessage) Spacer(modifier = Modifier.size(avatarSize + 6.dp))
+                    if (isOwnMessage) {
+                        IconButton(
+                            onClick = { expandedMenuMessageId = message.id },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.MoreVert,
+                                contentDescription = "Menu wiadomości",
+                                tint = Color(0xFF8CD9FF),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.size(avatarSize + 6.dp))
+                    }
                 }
             }
         }
@@ -916,10 +1005,44 @@ private fun DmThreadView(
         if (isUploadingAttachment) {
             Text(text = "Wysyłanie pliku...", color = Color(0xFF8CD9FF), modifier = Modifier.padding(start = 8.dp, top = 4.dp, bottom = 6.dp), style = metaStyle)
         }
+        if (editingMessageId != null) {
+            AlertDialog(
+                onDismissRequest = { editingMessageId = null },
+                title = { Text("Edytuj wiadomość") },
+                text = {
+                    OutlinedTextField(
+                        value = editingMessageDraft,
+                        onValueChange = { editingMessageDraft = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 3
+                    )
+                },
+                confirmButton = {
+                    Button(onClick = {
+                        val messageId = editingMessageId
+                        val trimmed = editingMessageDraft.trim()
+                        if (messageId == null) return@Button
+                        if (trimmed.isBlank()) {
+                            Toast.makeText(context, "Treść nie może być pusta", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        onEditMessage(messageId, trimmed)
+                        editingMessageId = null
+                    }) {
+                        Text("Zapisz")
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { editingMessageId = null }) {
+                        Text("Anuluj")
+                    }
+                }
+            )
+        }
         MessageComposeInput(
             onSend = { content -> onSendMessage("private", conversationKey, content, null) },
             compactMode = compactMode,
-            modifier = Modifier.imePadding(),
+            modifier = Modifier.navigationBarsPadding(),
             enabled = !isUploadingAttachment,
             mentionCandidates = mentionCandidates,
             onRequestMentionCandidates = onRequestMentionCandidates,
@@ -929,6 +1052,13 @@ private fun DmThreadView(
                     onPendingDirectMessageContentConsumed()
                 } else {
                     pendingMentionText = null
+                }
+            },
+            onInputFocused = {
+                if (messages.isNotEmpty()) {
+                    coroutineScope.launch {
+                        listState.animateScrollToItem(messages.lastIndex)
+                    }
                 }
             },
             onAddAttachment = {
@@ -946,11 +1076,12 @@ private fun DmThreadView(
 
     emojiPickerMessageId?.let { msgId ->
         EmojiPickerDialog(
-            onEmojiSelected = { emoji ->
-                onAddReaction(msgId, emoji)
+            onEmojiSelected = { reaction ->
+                onAddReaction(msgId, reaction)
                 emojiPickerMessageId = null
             },
-            onDismiss = { emojiPickerMessageId = null }
+            onDismiss = { emojiPickerMessageId = null },
+            customEmojis = customEmojis
         )
     }
 }
@@ -967,13 +1098,18 @@ private fun MessageBubble(
     compactMode: Boolean,
     senderStyle: androidx.compose.ui.text.TextStyle,
     onLongClick: () -> Unit,
-    onEditMessage: (Long) -> Unit,
-    onDeleteMessage: (Long) -> Unit,
-    onAddReaction: (String) -> Unit,
+    onEditMessage: () -> Unit,
+    onDeleteMessage: () -> Unit,
+    onAddReaction: (EmojiHelper.ReactionSelection) -> Unit,
+    onToggleReaction: (EmojiHelper.ReactionSelection, Boolean) -> Unit,
     onMentionRequest: () -> Unit,
+    onQuoteRequest: () -> Unit,
     expandedMenuMessageId: Long?,
     onMenuDismiss: () -> Unit,
-    onEmojiPickerOpen: () -> Unit
+    onEmojiPickerOpen: () -> Unit,
+    currentUserId: Long?,
+    customEmojiById: Map<String, String>,
+    customEmojiByName: Map<String, String>
 ) {
     val canManageMessage = isOwnMessage || canModerateAllMessages
     Column(
@@ -1002,8 +1138,64 @@ private fun MessageBubble(
                     html = message.content,
                     modifier = Modifier.fillMaxWidth(),
                     compactMode = compactMode,
-                    isOutgoing = isOwnMessage
+                    isOutgoing = isOwnMessage,
+                    onLongPress = onLongClick
                 )
+
+                val reactions = com.mkras.zulip.presentation.chat.EmojiHelper
+                    .summarizeReactionSummary(message.reactionSummary, currentUserId)
+                if (reactions.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.padding(top = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        reactions.forEach { aggregate ->
+                            val token = aggregate.token
+                            val display = com.mkras.zulip.presentation.chat.EmojiHelper
+                                .resolveReactionDisplay(
+                                    token = token,
+                                    customEmojiById = customEmojiById,
+                                    customEmojiByName = customEmojiByName
+                                )
+                            Surface(
+                                modifier = Modifier.clickable {
+                                    onToggleReaction(
+                                        com.mkras.zulip.presentation.chat.EmojiHelper.toReactionSelection(token),
+                                        aggregate.reactedByCurrentUser
+                                    )
+                                },
+                                shape = RoundedCornerShape(999.dp),
+                                color = if (aggregate.reactedByCurrentUser) Color(0x4A8CD9FF) else Color(0x2A8CD9FF)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                ) {
+                                    if (!display.imageUrl.isNullOrBlank()) {
+                                        AsyncImage(
+                                            model = display.imageUrl,
+                                            contentDescription = token.name,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    } else {
+                                        Text(
+                                            text = display.emojiText ?: "",
+                                            color = ContentColor,
+                                            style = MaterialTheme.typography.labelSmall
+                                        )
+                                    }
+                                    if (aggregate.count > 1) {
+                                        Text(
+                                            text = " ${aggregate.count}",
+                                            color = ContentColor,
+                                            style = MaterialTheme.typography.labelSmall
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 
                 if (isOwnMessage) {
                     Text(
@@ -1023,16 +1215,23 @@ private fun MessageBubble(
         DropdownMenu(expanded = expandedMenuMessageId == message.id, onDismissRequest = onMenuDismiss) {
             DropdownMenuItem(text = { Text("\uD83D\uDE0A Reakcja") }, onClick = { onMenuDismiss(); onEmojiPickerOpen() })
             DropdownMenuItem(text = { Text("@ Wspomnij") }, onClick = { onMenuDismiss(); onMentionRequest() })
+            DropdownMenuItem(text = { Text("\uD83D\uDCDD Cytuj") }, onClick = { onMenuDismiss(); onQuoteRequest() })
             if (canManageMessage) {
-                DropdownMenuItem(text = { Text("\u270F\uFE0F Edytuj") }, onClick = { onMenuDismiss(); onEditMessage(message.id) })
-                DropdownMenuItem(text = { Text("\uD83D\uDDD1\uFE0F Usuń") }, onClick = { onMenuDismiss(); onDeleteMessage(message.id) })
+                DropdownMenuItem(text = { Text("\u270F\uFE0F Edytuj") }, onClick = { onMenuDismiss(); onEditMessage() })
+                DropdownMenuItem(text = { Text("\uD83D\uDDD1\uFE0F Usuń") }, onClick = { onMenuDismiss(); onDeleteMessage() })
             }
         }
     }
 }
 
 @Composable
-private fun HtmlText(html: String, modifier: Modifier = Modifier, compactMode: Boolean, isOutgoing: Boolean = false) {
+private fun HtmlText(
+    html: String,
+    modifier: Modifier = Modifier,
+    compactMode: Boolean,
+    isOutgoing: Boolean = false,
+    onLongPress: () -> Unit = {}
+) {
     val textColor = if (isOutgoing) OutgoingText.toArgb() else ContentColor.toArgb()
     val context = LocalContext.current
     val markwon = remember(context) {
@@ -1051,6 +1250,11 @@ private fun HtmlText(html: String, modifier: Modifier = Modifier, compactMode: B
                 textSize = if (compactMode) 12f else 14f
                 setLineSpacing(2f, 1f)
                 movementMethod = LinkMovementMethod.getInstance()
+                isLongClickable = true
+                setOnLongClickListener {
+                    onLongPress()
+                    true
+                }
             }
         },
         update = { tv ->
