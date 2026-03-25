@@ -32,7 +32,7 @@ object OneDriveUpdateChecker {
                 }
 
                 val plainMatches = Regex(
-                    pattern = """(?:Toya-)?Zulip-v(\d+\.\d+\.\d+)\.apk""",
+                    pattern = """Zulip-v(\d+\.\d+\.\d+)\.apk""",
                     option = RegexOption.IGNORE_CASE
                 ).findAll(body)
                     .map { match ->
@@ -42,7 +42,7 @@ object OneDriveUpdateChecker {
                     .toList()
 
                 val encodedMatches = Regex(
-                    pattern = """(?:Toya-)?Zulip-v(\d+%2E\d+%2E\d+)%2Eapk""",
+                    pattern = """Zulip-v(\d+%2E\d+%2E\d+)%2Eapk""",
                     option = RegexOption.IGNORE_CASE
                 ).findAll(body)
                     .map { match ->

@@ -128,7 +128,7 @@ object GitHubUpdateManager {
                     return@use null
                 }
 
-                val explicitApk = Regex("""(?:Toya-)?Zulip-v$latestVersion\.apk""", RegexOption.IGNORE_CASE)
+                val explicitApk = Regex("""Zulip-v$latestVersion\.apk""", RegexOption.IGNORE_CASE)
                     .find(body)
                     ?.value
                 val apkName = explicitApk ?: "Zulip-v$latestVersion.apk"
