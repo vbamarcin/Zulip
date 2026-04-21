@@ -757,9 +757,17 @@ private fun DmThreadView(
         }
     }
 
-    LaunchedEffect(conversationKey, messages.size) {
+    LaunchedEffect(conversationKey, messages.size, currentUserEmail) {
         if (messages.isNotEmpty()) {
-            onMessagesRendered(messages.map { it.id })
+            val unreadIncomingIds = messages
+                .asSequence()
+                .filter { !it.isRead }
+                .filterNot { it.senderEmail.equals(currentUserEmail, ignoreCase = true) }
+                .map { it.id }
+                .toList()
+            if (unreadIncomingIds.isNotEmpty()) {
+                onMessagesRendered(unreadIncomingIds)
+            }
         }
     }
 
